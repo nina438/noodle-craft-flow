@@ -1,0 +1,163 @@
+import { useState, useMemo } from 'react';
+import { useAuth } from '@/lib/auth';
+import { getStore, setStore, genId } from '@/lib/store';
+import type { CashRegisterRecord } from '@/lib/types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus, Pencil, Search } from 'lucide-react';
+
+const INITIAL: Omit<CashRegisterRecord, 'id'> = {
+  date: new Date().toISOString().slice(0, 10), bills1000: 0, bills500: 0, bills100: 0,
+  coins50: 0, coins10: 0, coins5: 0, coins1: 0, other: 0, cashTotal: 0,
+  storeCashRevenue: 0, onlinePayment: 0, totalRevenue: 0, actualReceived: 0,
+  originalReserve: 5420, profitLoss: 0, checker: '', notes: '',
+};
+
+export default function CashRegisterPage() {
+  const { staffList } = useAuth();
+  const [records, setRecords] = useState<CashRegisterRecord[]>(() => getStore('cash_register'));
+  const [editing, setEditing] = useState<Omit<CashRegisterRecord, 'id'> & { id?: string }>(INITIAL);
+  const [open, setOpen] = useState(false);
+  const [searchDate, setSearchDate] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!searchDate) return records;
+    return records.filter(r => r.date === searchDate);
+  }, [records, searchDate]);
+
+  function calcTotals(r: typeof editing) {
+    const cashTotal = r.bills1000 * 1000 + r.bills500 * 500 + r.bills100 * 100 +
+      r.coins50 * 50 + r.coins10 * 10 + r.coins5 * 5 + r.coins1 * 1 + r.other;
+    const totalRevenue = r.storeCashRevenue + r.onlinePayment;
+    const profitLoss = r.actualReceived - totalRevenue;
+    return { ...r, cashTotal, totalRevenue, profitLoss };
+  }
+
+  function save() {
+    const rec = calcTotals(editing);
+    let next: CashRegisterRecord[];
+    if (rec.id) {
+      next = records.map(r => r.id === rec.id ? rec as CashRegisterRecord : r);
+    } else {
+      next = [...records, { ...rec, id: genId() } as CashRegisterRecord];
+    }
+    setRecords(next);
+    setStore('cash_register', next);
+    setOpen(false);
+    setEditing(INITIAL);
+  }
+
+  function edit(r: CashRegisterRecord) {
+    setEditing(r);
+    setOpen(true);
+  }
+
+  const F = (key: keyof typeof editing, label: string, type = 'number') => (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <Input
+        type={type}
+        value={editing[key] as string | number}
+        onChange={e => setEditing(prev => ({ ...prev, [key]: type === 'number' ? Number(e.target.value) : e.target.value }))}
+        className="h-9"
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 flex-1 min-w-48">
+          <Search className="w-4 h-4 text-muted-foreground" />
+          <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9 max-w-48" placeholder="依日期搜尋" />
+          {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
+        </div>
+        <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing(INITIAL); }}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增紀錄</Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>{editing.id ? '編輯' : '新增'}錢櫃營收紀錄</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              {F('date', '日期', 'date')}
+              <p className="text-sm font-medium text-foreground">鈔券清點</p>
+              <div className="grid grid-cols-4 gap-3">
+                {F('bills1000', '1000元')}
+                {F('bills500', '500元')}
+                {F('bills100', '100元')}
+                {F('coins50', '50元')}
+                {F('coins10', '10元')}
+                {F('coins5', '5元')}
+                {F('coins1', '1元')}
+                {F('other', '其他')}
+              </div>
+              <p className="text-sm font-medium text-foreground">營收資訊</p>
+              <div className="grid grid-cols-2 gap-3">
+                {F('storeCashRevenue', '門市營收(現金)')}
+                {F('onlinePayment', '線上支付')}
+                {F('actualReceived', '實收金額')}
+                {F('originalReserve', '原始預備金')}
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">盤點人員</label>
+                <select
+                  value={editing.checker}
+                  onChange={e => setEditing(p => ({ ...p, checker: e.target.value }))}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">選擇人員</option>
+                  {staffList.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              {F('notes', '備註', 'text')}
+              <Button onClick={save} className="w-full erp-gradient text-primary-foreground">儲存</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>日期</TableHead>
+                <TableHead className="text-right">錢櫃現金</TableHead>
+                <TableHead className="text-right">門市現金</TableHead>
+                <TableHead className="text-right">線上支付</TableHead>
+                <TableHead className="text-right">總營收</TableHead>
+                <TableHead className="text-right">實收金額</TableHead>
+                <TableHead className="text-right">損溢</TableHead>
+                <TableHead>盤點人員</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">尚無資料</TableCell></TableRow>
+              ) : filtered.map(r => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium">{r.date}</TableCell>
+                  <TableCell className="text-right">{r.cashTotal.toLocaleString()}</TableCell>
+                  <TableCell className="text-right">{r.storeCashRevenue.toLocaleString()}</TableCell>
+                  <TableCell className="text-right">{r.onlinePayment.toLocaleString()}</TableCell>
+                  <TableCell className="text-right">{r.totalRevenue.toLocaleString()}</TableCell>
+                  <TableCell className="text-right">{r.actualReceived.toLocaleString()}</TableCell>
+                  <TableCell className={`text-right font-medium ${r.profitLoss < 0 ? 'text-destructive' : r.profitLoss > 0 ? 'text-success' : ''}`}>
+                    {r.profitLoss.toLocaleString()}
+                  </TableCell>
+                  <TableCell>{r.checker}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => edit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
