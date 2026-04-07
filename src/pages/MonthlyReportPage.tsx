@@ -10,11 +10,11 @@ const COLORS = ['hsl(25,60%,42%)', 'hsl(160,30%,40%)', 'hsl(40,90%,55%)', 'hsl(2
 
 export default function MonthlyReportPage() {
   const { isAdmin } = useAuth();
-  if (!isAdmin) return <Navigate to="/" replace />;
-
   const cashRecords = useMemo(() => getStore<CashRegisterRecord>('cash_register'), []);
   const purchaseRecords = useMemo(() => getStore<PurchaseRecord>('purchases'), []);
   const pettyCashRecords = useMemo(() => getStore<PettyCashRecord>('petty_cash'), []);
+
+  if (!isAdmin) return <Navigate to="/" replace />;
 
   const monthlyRevenue = useMemo(() => {
     const map: Record<string, number> = {};

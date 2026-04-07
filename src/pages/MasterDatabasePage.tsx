@@ -14,7 +14,7 @@ export default function MasterDatabasePage() {
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('all');
   const [open, setOpen] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', category: CATEGORIES[0], unit: '', safetyStock: 0, currentStock: 0 });
+  const [newItem, setNewItem] = useState({ name: '', category: CATEGORIES[0] as string, unit: '', safetyStock: 0, currentStock: 0 });
 
   const filtered = useMemo(() => {
     let f = items;
