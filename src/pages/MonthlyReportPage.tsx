@@ -14,6 +14,29 @@ export default function MonthlyReportPage() {
   const purchaseRecords = useMemo(() => getStore<PurchaseRecord>('purchases'), []);
   const pettyCashRecords = useMemo(() => getStore<PettyCashRecord>('petty_cash'), []);
 
+  const monthlyRevenue = useMemo(() => {
+    const map: Record<string, number> = {};
+    cashRecords.forEach(r => { const m = r.date.slice(0, 7); map[m] = (map[m] || 0) + r.totalRevenue; });
+    return Object.entries(map).map(([month, revenue]) => ({ month, revenue })).sort((a, b) => a.month.localeCompare(b.month));
+  }, [cashRecords]);
+
+  const monthlyPurchases = useMemo(() => {
+    const map: Record<string, number> = {};
+    purchaseRecords.forEach(r => { const m = r.date.slice(0, 7); map[m] = (map[m] || 0) + r.totalAmount; });
+    return Object.entries(map).map(([month, amount]) => ({ month, amount })).sort((a, b) => a.month.localeCompare(b.month));
+  }, [purchaseRecords]);
+
+  const expenseByCategory = useMemo(() => {
+    const map: Record<string, number> = {};
+    pettyCashRecords.forEach(r => { const cat = r.category || '未分類'; map[cat] = (map[cat] || 0) + r.amount; });
+    return Object.entries(map).map(([name, value]) => ({ name, value }));
+  }, [pettyCashRecords]);
+
+  const totalRevenue = cashRecords.reduce((s, r) => s + r.totalRevenue, 0);
+  const totalPurchases = purchaseRecords.reduce((s, r) => s + r.totalAmount, 0);
+  const totalPettyCash = pettyCashRecords.reduce((s, r) => s + r.amount, 0);
+  const hasData = cashRecords.length > 0 || purchaseRecords.length > 0 || pettyCashRecords.length > 0;
+
   if (!isAdmin) return <Navigate to="/" replace />;
 
   const monthlyRevenue = useMemo(() => {
