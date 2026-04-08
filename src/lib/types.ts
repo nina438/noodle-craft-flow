@@ -29,10 +29,19 @@ export interface CashRegisterRecord {
   notes: string;
 }
 
+export interface PurchaseExtraRow {
+  category: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalAmount: number;
+}
+
 export interface PurchaseRecord {
   id: string;
   date: string;
-  supplier: string;
+  category: string;
   itemName: string;
   quantity: number;
   unit: string;
@@ -41,39 +50,38 @@ export interface PurchaseRecord {
   paymentMethod: string;
   checker: string;
   notes: string;
-  extra1Name: string;
-  extra1Value: string;
-  extra2Name: string;
-  extra2Value: string;
+  extraRows: PurchaseExtraRow[];
+}
+
+export interface PettyCashExtraRow {
+  description: string;
+  type: 'income' | 'expense';
+  amount: number;
 }
 
 export interface PettyCashRecord {
   id: string;
   date: string;
   description: string;
-  category: string;
+  type: 'income' | 'expense';
   amount: number;
   handler: string;
   notes: string;
-  extra1Name: string;
-  extra1Value: string;
-  extra2Name: string;
-  extra2Value: string;
+  extraRows: PettyCashExtraRow[];
+}
+
+export interface ReserveDenomination {
+  denomination: number;
+  quantity: number;
+  amount: number;
 }
 
 export interface ReserveFundRecord {
   id: string;
   date: string;
-  description: string;
-  type: 'in' | 'out';
-  amount: number;
-  balance: number;
+  denominations: ReserveDenomination[];
   handler: string;
   notes: string;
-  extra1Name: string;
-  extra1Value: string;
-  extra2Name: string;
-  extra2Value: string;
 }
 
 export interface InventoryItem {
@@ -85,16 +93,36 @@ export interface InventoryItem {
   currentStock: number;
 }
 
+export interface InventoryCheckItem {
+  itemName: string;
+  unit: string;
+  previousStock: number;
+  inOut: 'in' | 'out' | 'none';
+  quantity: number;
+  currentStock: number;
+}
+
+export interface InventoryExtraRow {
+  itemName: string;
+  unit: string;
+  inOut: 'in' | 'out' | 'none';
+  quantity: number;
+  previousStock: number;
+  currentStock: number;
+}
+
 export interface DailyInventoryRecord {
   id: string;
   date: string;
-  items: { itemId: string; itemName: string; unit: string; quantity: number }[];
+  items: InventoryCheckItem[];
   checker: string;
   notes: string;
-  extra1Name: string;
-  extra1Value: string;
-  extra2Name: string;
-  extra2Value: string;
+  extraRows: InventoryExtraRow[];
+}
+
+export interface NoodleExtraRow {
+  itemName: string;
+  quantity: number;
 }
 
 export interface NoodleDeliveryRecord {
@@ -105,10 +133,7 @@ export interface NoodleDeliveryRecord {
   unit: string;
   receiver: string;
   notes: string;
-  extra1Name: string;
-  extra1Value: string;
-  extra2Name: string;
-  extra2Value: string;
+  extraRows: NoodleExtraRow[];
 }
 
 export type ModuleKey = 
