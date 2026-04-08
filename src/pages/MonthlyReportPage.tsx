@@ -26,15 +26,18 @@ export default function MonthlyReportPage() {
     return Object.entries(map).map(([month, amount]) => ({ month, amount })).sort((a, b) => a.month.localeCompare(b.month));
   }, [purchaseRecords]);
 
-  const expenseByCategory = useMemo(() => {
+  const expenseByType = useMemo(() => {
     const map: Record<string, number> = {};
-    pettyCashRecords.forEach(r => { const cat = r.category || '未分類'; map[cat] = (map[cat] || 0) + r.amount; });
+    pettyCashRecords.forEach(r => {
+      const label = r.type === 'income' ? '收入' : '支出';
+      map[label] = (map[label] || 0) + r.amount;
+    });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [pettyCashRecords]);
 
   const totalRevenue = cashRecords.reduce((s, r) => s + r.totalRevenue, 0);
   const totalPurchases = purchaseRecords.reduce((s, r) => s + r.totalAmount, 0);
-  const totalPettyCash = pettyCashRecords.reduce((s, r) => s + r.amount, 0);
+  const totalPettyCash = pettyCashRecords.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
   const hasData = cashRecords.length > 0 || purchaseRecords.length > 0 || pettyCashRecords.length > 0;
 
   if (!isAdmin) return <Navigate to="/" replace />;
@@ -60,9 +63,9 @@ export default function MonthlyReportPage() {
               <ResponsiveContainer width="100%" height="100%"><LineChart data={monthlyPurchases}><CartesianGrid strokeDasharray="3 3" stroke="hsl(35,15%,88%)" /><XAxis dataKey="month" tick={{ fontSize: 12 }} /><YAxis tick={{ fontSize: 12 }} /><Tooltip /><Line type="monotone" dataKey="amount" name="進貨金額" stroke="hsl(160,30%,40%)" strokeWidth={2} /></LineChart></ResponsiveContainer>
             </div></CardContent></Card>
           )}
-          {expenseByCategory.length > 0 && (
-            <Card><CardHeader><CardTitle className="text-base">零用金支出分類</CardTitle></CardHeader><CardContent><div className="h-64">
-              <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={expenseByCategory} cx="50%" cy="50%" innerRadius={50} outerRadius={90} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>{expenseByCategory.map((_, idx) => <Cell key={idx} fill={COLORS[idx % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer>
+          {expenseByType.length > 0 && (
+            <Card><CardHeader><CardTitle className="text-base">零用金收支分布</CardTitle></CardHeader><CardContent><div className="h-64">
+              <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={expenseByType} cx="50%" cy="50%" innerRadius={50} outerRadius={90} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>{expenseByType.map((_, idx) => <Cell key={idx} fill={COLORS[idx % COLORS.length]} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer>
             </div></CardContent></Card>
           )}
         </div>

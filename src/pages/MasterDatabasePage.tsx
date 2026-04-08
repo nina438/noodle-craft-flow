@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { getDefaultInventory, saveInventory, CATEGORIES } from '@/lib/inventoryData';
+import { exportToCSV } from '@/lib/exportUtils';
 import { genId } from '@/lib/store';
 import type { InventoryItem } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Download } from 'lucide-react';
 
 export default function MasterDatabasePage() {
   const [items, setItems] = useState<InventoryItem[]>(() => getDefaultInventory());
@@ -35,17 +36,25 @@ export default function MasterDatabasePage() {
     setItems(next); saveInventory(next);
   }
 
+  function handleExport() {
+    exportToCSV(
+      ['品項名稱', '分類', '單位', '安全庫存', '目前庫存', '狀態'],
+      filtered.map(i => [i.name, i.category, i.unit, i.safetyStock, i.currentStock, i.safetyStock > 0 && i.currentStock < i.safetyStock ? '不足' : '正常']),
+      `總庫存表_${new Date().toISOString().slice(0, 10)}`
+    );
+  }
+
   const lowStockCount = items.filter(i => i.safetyStock > 0 && i.currentStock < i.safetyStock).length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 print-area">
       {lowStockCount > 0 && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
           <AlertTriangle className="w-4 h-4 text-warning" />
           <span className="text-sm text-warning font-medium">有 {lowStockCount} 項商品低於安全庫存</span>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 no-print">
         <div className="flex items-center gap-2 flex-1 min-w-48">
           <Search className="w-4 h-4 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋品項..." className="h-9 max-w-48" />
@@ -55,6 +64,7 @@ export default function MasterDatabasePage() {
           <option value="all">全部分類</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增品項</Button></DialogTrigger>
           <DialogContent>
