@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { path: '/daily-warehouse', label: '每日倉庫備品盤點表', icon: Warehouse },
   { path: '/product-inventory', label: '販售商品盤點表', icon: Package },
   { path: '/noodle-delivery', label: '麵廠送貨紀錄', icon: Truck },
-  { path: '/master-database', label: '商品主資料庫', icon: Database },
+  { path: '/master-database', label: '總庫存表', icon: Database },
   { path: '/monthly-report', label: '每月統計報表', icon: BarChart3, adminOnly: true },
 ];
 

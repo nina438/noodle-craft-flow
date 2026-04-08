@@ -30,9 +30,9 @@ function AuthGate() {
         <Route path="/purchases" element={<PurchasesPage />} />
         <Route path="/petty-cash" element={<PettyCashPage />} />
         <Route path="/reserve-fund" element={<ReserveFundPage />} />
-        <Route path="/daily-food" element={<InventoryCheckPage storeKey="daily_food" categoryFilter={['生鮮食材', '乾貨調味品']} title="食材盤點" />} />
-        <Route path="/daily-warehouse" element={<InventoryCheckPage storeKey="daily_warehouse" categoryFilter={['倉庫備品']} title="倉庫備品盤點" />} />
-        <Route path="/product-inventory" element={<InventoryCheckPage storeKey="product_inventory" categoryFilter={['販售商品']} title="販售商品盤點" />} />
+        <Route path="/daily-food" element={<InventoryCheckPage storeKey="daily_food" categoryFilter={['生鮮食材', '乾貨調味品']} title="食材盤點" showInOut />} />
+        <Route path="/daily-warehouse" element={<InventoryCheckPage storeKey="daily_warehouse" categoryFilter={['倉庫備品']} title="倉庫備品盤點" showInOut />} />
+        <Route path="/product-inventory" element={<InventoryCheckPage storeKey="product_inventory" categoryFilter={['販售商品']} title="販售商品盤點" showInOut />} />
         <Route path="/noodle-delivery" element={<NoodleDeliveryPage />} />
         <Route path="/master-database" element={<MasterDatabasePage />} />
         <Route path="/monthly-report" element={<MonthlyReportPage />} />
