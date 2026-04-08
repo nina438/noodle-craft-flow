@@ -1,71 +1,139 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
-import type { ReserveFundRecord } from '@/lib/types';
-import { Card, CardContent } from '@/components/ui/card';
+import { exportToCSV } from '@/lib/exportUtils';
+import { DENOMINATIONS } from '@/lib/inventoryData';
+import type { ReserveFundRecord, ReserveDenomination } from '@/lib/types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search } from 'lucide-react';
+import { Plus, Pencil, Search, Download } from 'lucide-react';
+
+const INITIAL_DENOMINATIONS: ReserveDenomination[] = [
+  { denomination: 500, quantity: 5, amount: 2500 },
+  { denomination: 100, quantity: 20, amount: 2000 },
+  { denomination: 50, quantity: 10, amount: 500 },
+  { denomination: 10, quantity: 30, amount: 300 },
+  { denomination: 5, quantity: 20, amount: 100 },
+  { denomination: 1, quantity: 20, amount: 20 },
+];
+
+const makeDenoms = (): ReserveDenomination[] => DENOMINATIONS.map(d => ({ denomination: d, quantity: 0, amount: 0 }));
 
 const INIT: Omit<ReserveFundRecord, 'id'> = {
-  date: new Date().toISOString().slice(0, 10), description: '', type: 'in',
-  amount: 0, balance: 0, handler: '', notes: '',
-  extra1Name: '', extra1Value: '', extra2Name: '', extra2Value: '',
+  date: new Date().toISOString().slice(0, 10),
+  denominations: makeDenoms(),
+  handler: '', notes: '',
 };
 
 export default function ReserveFundPage() {
   const { staffList } = useAuth();
   const [records, setRecords] = useState<ReserveFundRecord[]>(() => getStore('reserve_fund'));
-  const [editing, setEditing] = useState<Omit<ReserveFundRecord, 'id'> & { id?: string }>(INIT);
+  const [editing, setEditing] = useState<Omit<ReserveFundRecord, 'id'> & { id?: string }>({ ...INIT, denominations: makeDenoms() });
   const [open, setOpen] = useState(false);
   const [searchDate, setSearchDate] = useState('');
 
   const filtered = useMemo(() => searchDate ? records.filter(r => r.date === searchDate) : records, [records, searchDate]);
-  const lastBalance = records.length > 0 ? records[records.length - 1].balance : 0;
+
+  const currentBalance = useMemo(() => {
+    const balByDenom: Record<number, number> = {};
+    DENOMINATIONS.forEach(d => { balByDenom[d] = 0; });
+    INITIAL_DENOMINATIONS.forEach(d => { balByDenom[d.denomination] = (balByDenom[d.denomination] || 0) + d.quantity; });
+    records.forEach(r => {
+      (r.denominations || []).forEach(d => {
+        balByDenom[d.denomination] = (balByDenom[d.denomination] || 0) - d.quantity;
+      });
+    });
+    return DENOMINATIONS.map(d => ({
+      denomination: d,
+      quantity: balByDenom[d] || 0,
+      amount: (balByDenom[d] || 0) * d,
+    }));
+  }, [records]);
+
+  const totalBalance = currentBalance.reduce((s, d) => s + d.amount, 0);
+
+  function updateDenom(idx: number, quantity: number) {
+    setEditing(p => {
+      const denoms = [...p.denominations];
+      denoms[idx] = { ...denoms[idx], quantity, amount: quantity * denoms[idx].denomination };
+      return { ...p, denominations: denoms };
+    });
+  }
 
   function save() {
-    const prevBalance = records.length > 0 ? records[records.length - 1].balance : 0;
-    const balance = editing.type === 'in' ? prevBalance + editing.amount : prevBalance - editing.amount;
-    const rec = { ...editing, balance };
+    const rec = { ...editing };
     let next: ReserveFundRecord[];
     if (rec.id) next = records.map(r => r.id === rec.id ? rec as ReserveFundRecord : r);
     else next = [...records, { ...rec, id: genId() } as ReserveFundRecord];
-    setRecords(next); setStore('reserve_fund', next); setOpen(false); setEditing(INIT);
+    setRecords(next); setStore('reserve_fund', next); setOpen(false);
+    setEditing({ ...INIT, denominations: makeDenoms() });
   }
 
-  const F = (key: keyof typeof editing, label: string, type = 'text') => (
-    <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      <Input type={type} value={editing[key] as string | number}
-        onChange={e => setEditing(p => ({ ...p, [key]: type === 'number' ? Number(e.target.value) : e.target.value }))} className="h-9" />
-    </div>
-  );
+  function handleExport() {
+    const headers = ['日期', ...DENOMINATIONS.map(d => `${d}元(數量)`), ...DENOMINATIONS.map(d => `${d}元(金額)`), '取出總額', '經手人', '備註'];
+    const rows = filtered.map(r => {
+      const denoms = r.denominations || [];
+      const total = denoms.reduce((s, d) => s + d.amount, 0);
+      return [r.date, ...DENOMINATIONS.map(d => { const f = denoms.find(dd => dd.denomination === d); return f ? f.quantity : 0; }),
+        ...DENOMINATIONS.map(d => { const f = denoms.find(dd => dd.denomination === d); return f ? f.amount : 0; }), total, r.handler, r.notes];
+    });
+    exportToCSV(headers, rows as (string | number)[][], `預備金_${new Date().toISOString().slice(0, 10)}`);
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-4 print-area">
+      <Card><CardHeader className="pb-3"><CardTitle className="text-base">目前預備金餘額</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {currentBalance.map(d => (
+              <div key={d.denomination} className="text-center p-2 rounded-lg bg-muted/50">
+                <div className="text-xs text-muted-foreground">{d.denomination}元</div>
+                <div className="text-sm font-bold">{d.quantity}張/枚</div>
+                <div className="text-xs text-primary">${d.amount.toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-right text-sm font-bold">總餘額：<span className="text-primary text-lg">${totalBalance.toLocaleString()}</span></div>
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-3 no-print">
         <div className="flex items-center gap-2 flex-1 min-w-48">
           <Search className="w-4 h-4 text-muted-foreground" />
           <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9 max-w-48" />
           {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
         </div>
-        <div className="text-sm font-medium">目前餘額：<span className="text-info">${lastBalance.toLocaleString()}</span></div>
-        <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing(INIT); }}>
-          <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增</Button></DialogTrigger>
+        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing({ ...INIT, denominations: makeDenoms() }); }}>
+          <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />取出預備金</Button></DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{editing.id ? '編輯' : '新增'}預備金紀錄</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing.id ? '編輯' : '新增'}取出預備金紀錄</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              {F('date', '日期', 'date')}{F('description', '說明')}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">類型</label>
-                <select value={editing.type} onChange={e => setEditing(p => ({ ...p, type: e.target.value as 'in' | 'out' }))}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm">
-                  <option value="in">存入</option><option value="out">支出</option>
-                </select>
+              <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">日期</label>
+                <Input type="date" value={editing.date} onChange={e => setEditing(p => ({ ...p, date: e.target.value }))} className="h-9" /></div>
+
+              <p className="text-sm font-medium text-foreground">取出幣值與數量</p>
+              <div className="space-y-2">
+                {editing.denominations.map((d, idx) => (
+                  <div key={d.denomination} className="grid grid-cols-3 gap-3 items-center">
+                    <div className="text-sm font-medium">{d.denomination}元</div>
+                    <div className="space-y-1">
+                      <Input type="number" placeholder="數量" value={d.quantity || ''} onChange={e => updateDenom(idx, Number(e.target.value))} className="h-9" />
+                    </div>
+                    <div className="text-sm text-right text-primary font-medium">${d.amount.toLocaleString()}</div>
+                  </div>
+                ))}
               </div>
-              {F('amount', '金額', 'number')}
+              <div className="p-3 rounded-lg bg-muted/50">
+                <div className="flex justify-between text-sm font-bold">
+                  <span>取出總額</span>
+                  <span className="text-destructive">${editing.denominations.reduce((s, d) => s + d.amount, 0).toLocaleString()}</span>
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">經手人</label>
                 <select value={editing.handler} onChange={e => setEditing(p => ({ ...p, handler: e.target.value }))}
@@ -74,35 +142,39 @@ export default function ReserveFundPage() {
                   {staffList.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              {F('notes', '備註')}
-              <p className="text-xs font-medium text-muted-foreground">其他欄位</p>
-              <div className="grid grid-cols-2 gap-3">
-                {F('extra1Name', '欄位1名稱')}{F('extra1Value', '欄位1內容')}{F('extra2Name', '欄位2名稱')}{F('extra2Value', '欄位2內容')}
-              </div>
+              <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">備註</label>
+                <Input value={editing.notes} onChange={e => setEditing(p => ({ ...p, notes: e.target.value }))} className="h-9" /></div>
               <Button onClick={save} className="w-full erp-gradient text-primary-foreground">儲存</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
+
       <Card><CardContent className="p-0 overflow-x-auto">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>日期</TableHead><TableHead>說明</TableHead><TableHead>類型</TableHead>
-            <TableHead className="text-right">金額</TableHead><TableHead className="text-right">餘額</TableHead>
+            <TableHead>日期</TableHead>
+            {DENOMINATIONS.map(d => <TableHead key={d} className="text-right">{d}元</TableHead>)}
+            <TableHead className="text-right">取出總額</TableHead>
             <TableHead>經手人</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {filtered.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">尚無資料</TableCell></TableRow>
-            : filtered.map(r => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.date}</TableCell><TableCell>{r.description}</TableCell>
-                <TableCell><span className={`px-2 py-0.5 rounded text-xs font-medium ${r.type === 'in' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>{r.type === 'in' ? '存入' : '支出'}</span></TableCell>
-                <TableCell className="text-right font-medium">{r.amount.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-medium">{r.balance.toLocaleString()}</TableCell>
-                <TableCell>{r.handler}</TableCell>
-                <TableCell><Button variant="ghost" size="sm" onClick={() => { setEditing(r); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>
-              </TableRow>
-            ))}
+            {filtered.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">尚無資料</TableCell></TableRow>
+            : filtered.map(r => {
+              const total = (r.denominations || []).reduce((s, d) => s + d.amount, 0);
+              return (
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium">{r.date}</TableCell>
+                  {DENOMINATIONS.map(d => {
+                    const found = (r.denominations || []).find(dd => dd.denomination === d);
+                    return <TableCell key={d} className="text-right">{found && found.quantity ? `${found.quantity}` : '-'}</TableCell>;
+                  })}
+                  <TableCell className="text-right font-medium text-destructive">${total.toLocaleString()}</TableCell>
+                  <TableCell>{r.handler}</TableCell>
+                  <TableCell><Button variant="ghost" size="sm" onClick={() => { setEditing({ ...r, denominations: r.denominations || makeDenoms() }); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent></Card>
