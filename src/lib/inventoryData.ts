@@ -274,9 +274,14 @@ const rawOtherItems: RawItem[] = [
   { name: '瓦斯', category: '其他', unit: '桶', safetyStock: 0, currentStock: 0 },
 ];
 
+const DATA_VERSION = 'v3';
+
 export function getDefaultInventory(): InventoryItem[] {
-  const stored = localStorage.getItem('erp_master_inventory');
-  if (stored) return JSON.parse(stored);
+  const ver = localStorage.getItem('erp_master_inventory_version');
+  if (ver === DATA_VERSION) {
+    const stored = localStorage.getItem('erp_master_inventory');
+    if (stored) return JSON.parse(stored);
+  }
   
   const all = [...rawFreshItems, ...rawDryItems, ...rawWarehouseItems, ...rawSalesItems, ...rawNoodleFactoryItems, ...rawOtherItems];
   const items: InventoryItem[] = all.map(r => ({
@@ -288,6 +293,7 @@ export function getDefaultInventory(): InventoryItem[] {
     currentStock: r.currentStock,
   }));
   localStorage.setItem('erp_master_inventory', JSON.stringify(items));
+  localStorage.setItem('erp_master_inventory_version', DATA_VERSION);
   return items;
 }
 

@@ -32,3 +32,34 @@ export function exportToPrintPDF(title: string) {
   window.print();
   document.head.removeChild(style);
 }
+
+export function parseCSVFile(file: File): Promise<string[][]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      const rows = lines.map(line => {
+        const result: string[] = [];
+        let cur = '', inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inQuote) {
+            if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+            else if (ch === '"') inQuote = false;
+            else cur += ch;
+          } else {
+            if (ch === '"') inQuote = true;
+            else if (ch === ',') { result.push(cur.trim()); cur = ''; }
+            else cur += ch;
+          }
+        }
+        result.push(cur.trim());
+        return result;
+      });
+      resolve(rows);
+    };
+    reader.onerror = () => reject(new Error('檔案讀取失敗'));
+    reader.readAsText(file, 'UTF-8');
+  });
+}
