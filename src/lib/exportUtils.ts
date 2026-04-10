@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx';
+
 export function exportToCSV(headers: string[], rows: (string | number)[][], filename: string) {
   const bom = '\uFEFF';
   const csvContent = bom + [
@@ -62,4 +64,31 @@ export function parseCSVFile(file: File): Promise<string[][]> {
     reader.onerror = () => reject(new Error('檔案讀取失敗'));
     reader.readAsText(file, 'UTF-8');
   });
+}
+
+export function parseExcelFile(file: File): Promise<string[][]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows: string[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+        resolve(rows.map(row => row.map(cell => String(cell))));
+      } catch (err) {
+        reject(new Error('Excel 檔案解析失敗'));
+      }
+    };
+    reader.onerror = () => reject(new Error('檔案讀取失敗'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+export function exportToExcel(headers: string[], rows: (string | number)[][], filename: string) {
+  const wsData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  XLSX.writeFile(wb, `${filename}.xlsx`);
 }
