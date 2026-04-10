@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { getDefaultInventory, saveInventory, CATEGORIES } from '@/lib/inventoryData';
-import { exportToCSV, parseCSVFile } from '@/lib/exportUtils';
+import { exportToCSV, exportToExcel, parseExcelFile } from '@/lib/exportUtils';
 import { genId } from '@/lib/store';
 import type { InventoryItem } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,7 +50,7 @@ export default function MasterDatabasePage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const rows = await parseCSVFile(file);
+      const rows = await parseExcelFile(file);
       if (rows.length < 2) { toast.error('檔案內容不足'); return; }
       const header = rows[0];
       const nameIdx = header.findIndex(h => h.includes('品項') || h.includes('名稱') || h.includes('name'));
@@ -113,8 +113,15 @@ export default function MasterDatabasePage() {
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
-        <input ref={fileRef} type="file" accept=".csv" onChange={handleImport} className="hidden" />
-        <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4 mr-1" />匯入CSV</Button>
+        <Button variant="outline" size="sm" onClick={() => {
+          exportToExcel(
+            ['品項名稱', '分類', '單位', '安全庫存', '目前庫存', '狀態'],
+            filtered.map(i => [i.name, i.category, i.unit, i.safetyStock, i.currentStock, i.safetyStock > 0 && i.currentStock < i.safetyStock ? '不足' : '正常']),
+            `總庫存表_${new Date().toISOString().slice(0, 10)}`
+          );
+        }}><Download className="w-4 h-4 mr-1" />匯出Excel</Button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleImport} className="hidden" />
+        <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4 mr-1" />匯入Excel</Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增品項</Button></DialogTrigger>
           <DialogContent>
