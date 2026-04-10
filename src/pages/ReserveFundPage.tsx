@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download } from 'lucide-react';
+import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
 
 const INITIAL_DENOMINATIONS: ReserveDenomination[] = [
   { denomination: 500, quantity: 5, amount: 2500 },
@@ -171,7 +171,10 @@ export default function ReserveFundPage() {
                   })}
                   <TableCell className="text-right font-medium text-destructive">${total.toLocaleString()}</TableCell>
                   <TableCell>{r.handler}</TableCell>
-                  <TableCell><Button variant="ghost" size="sm" onClick={() => { setEditing({ ...r, denominations: r.denominations || makeDenoms() }); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>
+                  <TableCell className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => { setEditing({ ...r, denominations: r.denominations || makeDenoms() }); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => { if (confirm('確定刪除此筆資料？')) { const next = records.filter(x => x.id !== r.id); setRecords(next); setStore('reserve_fund', next); } }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                  </TableCell>
                 </TableRow>
               );
             })}
