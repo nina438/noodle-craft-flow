@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download } from 'lucide-react';
+import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
 
 const emptyExtra = (): PettyCashExtraRow => ({ description: '', type: 'expense', amount: 0 });
 
@@ -136,7 +136,10 @@ export default function PettyCashPage() {
                 <TableCell><span className={`px-2 py-0.5 rounded text-xs font-medium ${r.type === 'income' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>{r.type === 'income' ? '收入' : '支出'}</span></TableCell>
                 <TableCell className="text-right font-medium">{r.amount.toLocaleString()}</TableCell><TableCell>{r.handler}</TableCell>
                 <TableCell className="text-muted-foreground text-xs">{r.notes}</TableCell>
-                <TableCell><Button variant="ghost" size="sm" onClick={() => { setEditing({ ...r, extraRows: r.extraRows || Array.from({ length: 5 }, emptyExtra) }); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>
+                <TableCell className="flex gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => { setEditing({ ...r, extraRows: r.extraRows || Array.from({ length: 5 }, emptyExtra) }); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => { if (confirm('確定刪除此筆資料？')) { const next = records.filter(x => x.id !== r.id); setRecords(next); setStore('petty_cash', next); } }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

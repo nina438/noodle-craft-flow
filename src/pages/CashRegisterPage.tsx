@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download } from 'lucide-react';
+import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
 
 const ORIGINAL_RESERVE = 5420;
 
@@ -129,7 +129,10 @@ export default function CashRegisterPage() {
                 <TableCell className="text-right">{r.actualReceived.toLocaleString()}</TableCell>
                 <TableCell className={`text-right font-medium ${r.profitLoss < 0 ? 'text-destructive' : r.profitLoss > 0 ? 'text-success' : ''}`}>{r.profitLoss.toLocaleString()}</TableCell>
                 <TableCell>{r.checker}</TableCell>
-                <TableCell><Button variant="ghost" size="sm" onClick={() => { setEditing(r); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button></TableCell>
+                <TableCell className="flex gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => { if (confirm('確定刪除此筆資料？')) { const next = records.filter(x => x.id !== r.id); setRecords(next); setStore('cash_register', next); } }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

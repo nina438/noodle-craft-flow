@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Search, Save, Download } from 'lucide-react';
+import { Plus, Search, Save, Download, Trash2 } from 'lucide-react';
 
 interface Props {
   storeKey: string;
@@ -241,7 +241,10 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
                 <TableCell>{r.checker}</TableCell>
                 <TableCell className="text-right">{r.items.filter(i => i.quantity > 0).length}</TableCell>
                 <TableCell className="text-muted-foreground text-xs">{r.notes}</TableCell>
-                <TableCell><Button variant="ghost" size="sm" onClick={() => startEdit(r)}>查看/編輯</Button></TableCell>
+                <TableCell className="flex gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => startEdit(r)}>查看/編輯</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { if (confirm('確定刪除此筆盤點紀錄？')) { const next = records.filter(x => x.id !== r.id); setRecords(next); setStore(storeKey, next); } }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
