@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { getDefaultInventory, saveInventory, CATEGORIES } from '@/lib/inventoryData';
-import { exportToCSV } from '@/lib/exportUtils';
+import { exportToCSV, parseCSVFile } from '@/lib/exportUtils';
 import { genId } from '@/lib/store';
 import type { InventoryItem } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Search, AlertTriangle, Download } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Download, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function MasterDatabasePage() {
   const [items, setItems] = useState<InventoryItem[]>(() => getDefaultInventory());
@@ -16,6 +17,7 @@ export default function MasterDatabasePage() {
   const [catFilter, setCatFilter] = useState('all');
   const [open, setOpen] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', category: CATEGORIES[0] as string, unit: '', safetyStock: 0, currentStock: 0 });
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     let f = items;
@@ -44,6 +46,52 @@ export default function MasterDatabasePage() {
     );
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const rows = await parseCSVFile(file);
+      if (rows.length < 2) { toast.error('檔案內容不足'); return; }
+      const header = rows[0];
+      const nameIdx = header.findIndex(h => h.includes('品項') || h.includes('名稱') || h.includes('name'));
+      const catIdx = header.findIndex(h => h.includes('分類') || h.includes('category'));
+      const unitIdx = header.findIndex(h => h.includes('單位') || h.includes('unit'));
+      const safeIdx = header.findIndex(h => h.includes('安全') || h.includes('safety'));
+      const stockIdx = header.findIndex(h => h.includes('庫存') || h.includes('stock'));
+
+      if (nameIdx < 0) { toast.error('找不到品項名稱欄位'); return; }
+
+      let added = 0, updated = 0;
+      const next = [...items];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const name = row[nameIdx]?.trim();
+        if (!name) continue;
+        const existing = next.find(it => it.name === name);
+        if (existing) {
+          if (stockIdx >= 0 && row[stockIdx]) existing.currentStock = Number(row[stockIdx]) || 0;
+          if (safeIdx >= 0 && row[safeIdx]) existing.safetyStock = Number(row[safeIdx]) || 0;
+          updated++;
+        } else {
+          next.push({
+            id: genId(),
+            name,
+            category: (catIdx >= 0 ? row[catIdx]?.trim() : '') || '其他',
+            unit: (unitIdx >= 0 ? row[unitIdx]?.trim() : '') || '個',
+            safetyStock: safeIdx >= 0 ? Number(row[safeIdx]) || 0 : 0,
+            currentStock: stockIdx >= 0 ? Number(row[stockIdx]) || 0 : 0,
+          });
+          added++;
+        }
+      }
+      setItems(next); saveInventory(next);
+      toast.success(`匯入完成：新增 ${added} 項，更新 ${updated} 項`);
+    } catch (err) {
+      toast.error('匯入失敗：' + (err instanceof Error ? err.message : '未知錯誤'));
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
   const lowStockCount = items.filter(i => i.safetyStock > 0 && i.currentStock < i.safetyStock).length;
 
   return (
@@ -65,6 +113,8 @@ export default function MasterDatabasePage() {
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <input ref={fileRef} type="file" accept=".csv" onChange={handleImport} className="hidden" />
+        <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4 mr-1" />匯入CSV</Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增品項</Button></DialogTrigger>
           <DialogContent>
