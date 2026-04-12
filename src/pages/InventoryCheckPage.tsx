@@ -153,10 +153,11 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
         found.quantity = Number(r[qtyIdx] || 0);
         if (inOutIdx >= 0) {
           const io = r[inOutIdx]?.trim();
-          found.inOut = io === '進' ? 'in' : io === '出' ? 'out' : 'none';
+          (found as any).inOut = io === '進' ? 'in' : io === '出' ? 'out' : 'none';
         }
-        if (found.inOut === 'in') found.currentStock = found.previousStock + found.quantity;
-        else if (found.inOut === 'out') found.currentStock = found.previousStock - found.quantity;
+        const inOut = (found as any).inOut as string;
+        if (inOut === 'in') found.currentStock = found.previousStock + found.quantity;
+        else if (inOut === 'out') found.currentStock = found.previousStock - found.quantity;
       }
     }
     const rec: DailyInventoryRecord = {
