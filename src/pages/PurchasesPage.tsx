@@ -1,15 +1,17 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
-import { exportToCSV } from '@/lib/exportUtils';
 import { CATEGORIES, getItemsByCategory, PAYMENT_METHODS } from '@/lib/inventoryData';
+import { getDefaultInventory, saveInventory } from '@/lib/inventoryData';
 import type { PurchaseRecord, PurchaseExtraRow } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
+import ExcelImportExport from '@/components/ExcelImportExport';
+import { toast } from 'sonner';
 
 const emptyExtra = (): PurchaseExtraRow => ({ category: '', itemName: '', quantity: 0, unit: '', unitPrice: 0, totalAmount: 0 });
 
@@ -19,6 +21,16 @@ const INIT: Omit<PurchaseRecord, 'id'> = {
   paymentMethod: '現金', checker: '', notes: '',
   extraRows: Array.from({ length: 7 }, emptyExtra),
 };
+
+function syncStockFromPurchase(itemName: string, qty: number) {
+  if (!itemName) return;
+  const items = getDefaultInventory();
+  const item = items.find(i => i.name === itemName);
+  if (item) {
+    item.currentStock += qty;
+    saveInventory(items);
+  }
+}
 
 export default function PurchasesPage() {
   const { staffList } = useAuth();
@@ -40,11 +52,16 @@ export default function PurchasesPage() {
     const totalAmount = editing.quantity * editing.unitPrice;
     const extraRows = editing.extraRows.map(er => ({ ...er, totalAmount: er.quantity * er.unitPrice }));
     const rec = { ...editing, totalAmount, extraRows };
+    const isNew = !rec.id;
     let next: PurchaseRecord[];
     if (rec.id) next = records.map(r => r.id === rec.id ? rec as PurchaseRecord : r);
     else next = [...records, { ...rec, id: genId() } as PurchaseRecord];
     setRecords(next); setStore('purchases', next); setOpen(false);
     setEditing({ ...INIT, extraRows: INIT.extraRows.map(r => ({ ...r })) });
+    if (isNew) {
+      syncStockFromPurchase(rec.itemName, rec.quantity);
+      extraRows.forEach(er => syncStockFromPurchase(er.itemName, er.quantity));
+    }
   }
 
   function updateExtra(idx: number, field: keyof PurchaseExtraRow, value: string | number) {
@@ -56,12 +73,31 @@ export default function PurchasesPage() {
     });
   }
 
-  function handleExport() {
-    exportToCSV(
-      ['日期', '種類', '品項', '數量', '單位', '單價', '總額', '付款方式', '經手人', '備註'],
-      filtered.map(r => [r.date, r.category, r.itemName, r.quantity, r.unit, r.unitPrice, r.totalAmount, r.paymentMethod, r.checker, r.notes]),
-      `進貨紀錄_${new Date().toISOString().slice(0, 10)}`
-    );
+  function handleImport(rows: string[][]) {
+    const header = rows[0];
+    const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
+    const dateIdx = map(['日期']); const catIdx = map(['種類', '分類']); const nameIdx = map(['品項', '名稱']);
+    const qtyIdx = map(['數量']); const unitIdx = map(['單位']); const priceIdx = map(['單價']);
+    const payIdx = map(['付款']); const checkerIdx = map(['經手', '人員']); const notesIdx = map(['備註']);
+    let added = 0;
+    const next = [...records];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const qty = Number(r[qtyIdx] || 0);
+      const price = Number(r[priceIdx] || 0);
+      next.push({
+        id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '',
+        category: r[catIdx] || '', itemName: r[nameIdx] || '',
+        quantity: qty, unit: r[unitIdx] || '', unitPrice: price, totalAmount: qty * price,
+        paymentMethod: r[payIdx] || '現金', checker: r[checkerIdx] || '', notes: r[notesIdx] || '',
+        extraRows: [],
+      });
+      syncStockFromPurchase(r[nameIdx] || '', qty);
+      added++;
+    }
+    setRecords(next); setStore('purchases', next);
+    toast.success(`匯入完成：新增 ${added} 筆`);
   }
 
   return (
@@ -73,7 +109,12 @@ export default function PurchasesPage() {
           {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
         </div>
         <div className="text-sm font-medium text-foreground">總計：<span className="text-primary">${totalSum.toLocaleString()}</span></div>
-        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <ExcelImportExport
+          exportHeaders={['日期', '種類', '品項', '數量', '單位', '單價', '總額', '付款方式', '經手人', '備註']}
+          exportRows={() => filtered.map(r => [r.date, r.category, r.itemName, r.quantity, r.unit, r.unitPrice, r.totalAmount, r.paymentMethod, r.checker, r.notes])}
+          exportFilename={`進貨紀錄_${new Date().toISOString().slice(0, 10)}`}
+          onImport={handleImport}
+        />
         <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing({ ...INIT, extraRows: INIT.extraRows.map(r => ({ ...r })) }); }}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增</Button></DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -92,7 +133,6 @@ export default function PurchasesPage() {
                   </select>
                 </div>
               </div>
-
               <p className="text-sm font-medium text-foreground">主要品項</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -122,7 +162,6 @@ export default function PurchasesPage() {
                 <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">金額</label>
                   <div className="h-9 flex items-center px-3 rounded-md bg-muted text-sm font-medium">${(editing.quantity * editing.unitPrice).toLocaleString()}</div></div>
               </div>
-
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">盤點人員</label>
                 <select value={editing.checker} onChange={e => setEditing(p => ({ ...p, checker: e.target.value }))}
@@ -133,15 +172,12 @@ export default function PurchasesPage() {
               </div>
               <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">備註</label>
                 <Input value={editing.notes} onChange={e => setEditing(p => ({ ...p, notes: e.target.value }))} className="h-9" /></div>
-
               <p className="text-sm font-medium text-foreground mt-2">其他品項</p>
               {editing.extraRows.map((row, idx) => {
                 const extraItems = row.category ? getItemsByCategory(row.category) : [];
                 return (
                   <div key={idx} className="p-3 border rounded-lg space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-muted-foreground">其他欄位 {idx + 1}</span>
-                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">其他欄位 {idx + 1}</span>
                     <div className="grid grid-cols-2 gap-2">
                       <select value={row.category} onChange={e => updateExtra(idx, 'category', e.target.value)}
                         className="h-8 rounded-md border border-input bg-background px-2 text-xs">
@@ -163,7 +199,6 @@ export default function PurchasesPage() {
                   </div>
                 );
               })}
-
               <Button onClick={save} className="w-full erp-gradient text-primary-foreground">儲存</Button>
             </div>
           </DialogContent>
