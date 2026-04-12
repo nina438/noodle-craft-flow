@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
-import { exportToCSV } from '@/lib/exportUtils';
 import type { PettyCashRecord, PettyCashExtraRow } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
+import ExcelImportExport from '@/components/ExcelImportExport';
+import { toast } from 'sonner';
 
 const emptyExtra = (): PettyCashExtraRow => ({ description: '', type: 'expense', amount: 0 });
 
@@ -55,12 +56,27 @@ export default function PettyCashPage() {
     });
   }
 
-  function handleExport() {
-    exportToCSV(
-      ['日期', '說明', '類型', '金額', '經手人', '備註'],
-      filtered.map(r => [r.date, r.description, r.type === 'income' ? '收入' : '支出', r.amount, r.handler, r.notes]),
-      `零用金_${new Date().toISOString().slice(0, 10)}`
-    );
+  function handleImport(rows: string[][]) {
+    const header = rows[0];
+    const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
+    const dateIdx = map(['日期']); const descIdx = map(['說明', '描述']); const typeIdx = map(['類型', '收支']);
+    const amtIdx = map(['金額']); const handlerIdx = map(['經手', '人員']); const notesIdx = map(['備註']);
+    let added = 0;
+    const next = [...records];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const typeStr = r[typeIdx] || '';
+      next.push({
+        id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '',
+        description: r[descIdx] || '', type: typeStr.includes('收') ? 'income' : 'expense',
+        amount: Number(r[amtIdx] || 0), handler: r[handlerIdx] || '', notes: r[notesIdx] || '',
+        extraRows: [],
+      });
+      added++;
+    }
+    setRecords(next); setStore('petty_cash', next);
+    toast.success(`匯入完成：新增 ${added} 筆`);
   }
 
   return (
@@ -72,7 +88,12 @@ export default function PettyCashPage() {
           {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
         </div>
         <div className="text-sm font-medium">目前餘額：<span className={balance >= 0 ? 'text-success' : 'text-destructive'}>${balance.toLocaleString()}</span></div>
-        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <ExcelImportExport
+          exportHeaders={['日期', '說明', '類型', '金額', '經手人', '備註']}
+          exportRows={() => filtered.map(r => [r.date, r.description, r.type === 'income' ? '收入' : '支出', r.amount, r.handler, r.notes])}
+          exportFilename={`零用金_${new Date().toISOString().slice(0, 10)}`}
+          onImport={handleImport}
+        />
         <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing({ ...INIT, extraRows: INIT.extraRows.map(r => ({ ...r })) }); }}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增</Button></DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -101,7 +122,6 @@ export default function PettyCashPage() {
               </div>
               <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">備註</label>
                 <Input value={editing.notes} onChange={e => setEditing(p => ({ ...p, notes: e.target.value }))} className="h-9" /></div>
-
               <p className="text-sm font-medium text-foreground mt-2">其他欄位</p>
               {editing.extraRows.map((row, idx) => (
                 <div key={idx} className="p-3 border rounded-lg space-y-2">
@@ -116,7 +136,6 @@ export default function PettyCashPage() {
                   </div>
                 </div>
               ))}
-
               <Button onClick={save} className="w-full erp-gradient text-primary-foreground">儲存</Button>
             </div>
           </DialogContent>

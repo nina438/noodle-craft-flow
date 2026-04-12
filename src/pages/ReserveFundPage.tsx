@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
-import { exportToCSV } from '@/lib/exportUtils';
 import { DENOMINATIONS } from '@/lib/inventoryData';
 import type { ReserveFundRecord, ReserveDenomination } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
+import ExcelImportExport from '@/components/ExcelImportExport';
+import { toast } from 'sonner';
 
 const INITIAL_DENOMINATIONS: ReserveDenomination[] = [
   { denomination: 500, quantity: 5, amount: 2500 },
@@ -72,16 +73,33 @@ export default function ReserveFundPage() {
     setEditing({ ...INIT, denominations: makeDenoms() });
   }
 
-  function handleExport() {
-    const headers = ['日期', ...DENOMINATIONS.map(d => `${d}元(數量)`), ...DENOMINATIONS.map(d => `${d}元(金額)`), '取出總額', '經手人', '備註'];
-    const rows = filtered.map(r => {
-      const denoms = r.denominations || [];
-      const total = denoms.reduce((s, d) => s + d.amount, 0);
-      return [r.date, ...DENOMINATIONS.map(d => { const f = denoms.find(dd => dd.denomination === d); return f ? f.quantity : 0; }),
-        ...DENOMINATIONS.map(d => { const f = denoms.find(dd => dd.denomination === d); return f ? f.amount : 0; }), total, r.handler, r.notes];
+  function handleImport(rows: string[][]) {
+    const header = rows[0];
+    const dateIdx = header.findIndex(h => h.includes('日期'));
+    const handlerIdx = header.findIndex(h => h.includes('經手') || h.includes('人員'));
+    const notesIdx = header.findIndex(h => h.includes('備註'));
+    const denomIdxMap: Record<number, number> = {};
+    DENOMINATIONS.forEach(d => {
+      const idx = header.findIndex(h => h.includes(`${d}元`) || h === `${d}`);
+      if (idx >= 0) denomIdxMap[d] = idx;
     });
-    exportToCSV(headers, rows as (string | number)[][], `預備金_${new Date().toISOString().slice(0, 10)}`);
+    let added = 0;
+    const next = [...records];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const denoms = DENOMINATIONS.map(d => {
+        const qty = denomIdxMap[d] !== undefined ? Number(r[denomIdxMap[d]] || 0) : 0;
+        return { denomination: d, quantity: qty, amount: qty * d };
+      });
+      next.push({ id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '', denominations: denoms, handler: r[handlerIdx] || '', notes: r[notesIdx] || '' });
+      added++;
+    }
+    setRecords(next); setStore('reserve_fund', next);
+    toast.success(`匯入完成：新增 ${added} 筆`);
   }
+
+  const exportHeaders = ['日期', ...DENOMINATIONS.map(d => `${d}元(數量)`), ...DENOMINATIONS.map(d => `${d}元(金額)`), '取出總額', '經手人', '備註'];
 
   return (
     <div className="space-y-4 print-area">
@@ -106,7 +124,17 @@ export default function ReserveFundPage() {
           <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9 max-w-48" />
           {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <ExcelImportExport
+          exportHeaders={exportHeaders}
+          exportRows={() => filtered.map(r => {
+            const denoms = r.denominations || [];
+            const total = denoms.reduce((s, d) => s + d.amount, 0);
+            return [r.date, ...DENOMINATIONS.map(d => { const f = denoms.find(dd => dd.denomination === d); return f ? f.quantity : 0; }),
+              ...DENOMINATIONS.map(d => { const f = denoms.find(dd => dd.denomination === d); return f ? f.amount : 0; }), total, r.handler, r.notes] as (string | number)[];
+          })}
+          exportFilename={`預備金_${new Date().toISOString().slice(0, 10)}`}
+          onImport={handleImport}
+        />
         <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing({ ...INIT, denominations: makeDenoms() }); }}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />取出預備金</Button></DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -114,15 +142,12 @@ export default function ReserveFundPage() {
             <div className="space-y-3">
               <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">日期</label>
                 <Input type="date" value={editing.date} onChange={e => setEditing(p => ({ ...p, date: e.target.value }))} className="h-9" /></div>
-
               <p className="text-sm font-medium text-foreground">取出幣值與數量</p>
               <div className="space-y-2">
                 {editing.denominations.map((d, idx) => (
                   <div key={d.denomination} className="grid grid-cols-3 gap-3 items-center">
                     <div className="text-sm font-medium">{d.denomination}元</div>
-                    <div className="space-y-1">
-                      <Input type="number" placeholder="數量" value={d.quantity || ''} onChange={e => updateDenom(idx, Number(e.target.value))} className="h-9" />
-                    </div>
+                    <Input type="number" placeholder="數量" value={d.quantity || ''} onChange={e => updateDenom(idx, Number(e.target.value))} className="h-9" />
                     <div className="text-sm text-right text-primary font-medium">${d.amount.toLocaleString()}</div>
                   </div>
                 ))}
@@ -133,7 +158,6 @@ export default function ReserveFundPage() {
                   <span className="text-destructive">${editing.denominations.reduce((s, d) => s + d.amount, 0).toLocaleString()}</span>
                 </div>
               </div>
-
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">經手人</label>
                 <select value={editing.handler} onChange={e => setEditing(p => ({ ...p, handler: e.target.value }))}

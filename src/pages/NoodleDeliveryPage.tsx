@@ -1,17 +1,28 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
-import { getDefaultInventory } from '@/lib/inventoryData';
-import { exportToCSV } from '@/lib/exportUtils';
+import { getDefaultInventory, saveInventory } from '@/lib/inventoryData';
 import type { NoodleDeliveryRecord, NoodleExtraRow } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
+import ExcelImportExport from '@/components/ExcelImportExport';
+import { toast } from 'sonner';
 
 const emptyExtra = (): NoodleExtraRow => ({ itemName: '', quantity: 0 });
+
+function syncStockFromDelivery(itemName: string, qty: number) {
+  if (!itemName || qty <= 0) return;
+  const items = getDefaultInventory();
+  const item = items.find(i => i.name === itemName);
+  if (item) {
+    item.currentStock += qty;
+    saveInventory(items);
+  }
+}
 
 export default function NoodleDeliveryPage() {
   const { staffList } = useAuth();
@@ -19,7 +30,7 @@ export default function NoodleDeliveryPage() {
   const [records, setRecords] = useState<NoodleDeliveryRecord[]>(() => getStore('noodle_delivery'));
   const [editing, setEditing] = useState<Omit<NoodleDeliveryRecord, 'id'> & { id?: string }>({
     date: new Date().toISOString().slice(0, 10), itemName: '', quantity: 0, unit: '包',
-    receiver: '', notes: '', extraRows: Array.from({ length: 5 }, emptyExtra),
+    receiver: '', notes: '', extraRows: Array.from({ length: 8 }, emptyExtra),
   });
   const [open, setOpen] = useState(false);
   const [searchDate, setSearchDate] = useState('');
@@ -28,14 +39,19 @@ export default function NoodleDeliveryPage() {
 
   const INIT = () => ({
     date: new Date().toISOString().slice(0, 10), itemName: '', quantity: 0, unit: '包',
-    receiver: '', notes: '', extraRows: Array.from({ length: 5 }, emptyExtra),
+    receiver: '', notes: '', extraRows: Array.from({ length: 8 }, emptyExtra),
   });
 
   function save() {
+    const isNew = !editing.id;
     let next: NoodleDeliveryRecord[];
     if (editing.id) next = records.map(r => r.id === editing.id ? editing as NoodleDeliveryRecord : r);
     else next = [...records, { ...editing, id: genId() } as NoodleDeliveryRecord];
     setRecords(next); setStore('noodle_delivery', next); setOpen(false); setEditing(INIT());
+    if (isNew) {
+      syncStockFromDelivery(editing.itemName, editing.quantity);
+      (editing.extraRows || []).forEach(er => syncStockFromDelivery(er.itemName, er.quantity));
+    }
   }
 
   function updateExtra(idx: number, field: keyof NoodleExtraRow, value: string | number) {
@@ -46,12 +62,28 @@ export default function NoodleDeliveryPage() {
     });
   }
 
-  function handleExport() {
-    exportToCSV(
-      ['日期', '品項', '數量', '單位', '收貨人', '備註'],
-      filtered.map(r => [r.date, r.itemName, r.quantity, r.unit, r.receiver, r.notes]),
-      `麵廠送貨_${new Date().toISOString().slice(0, 10)}`
-    );
+  function handleImport(rows: string[][]) {
+    const header = rows[0];
+    const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
+    const dateIdx = map(['日期']); const nameIdx = map(['品項', '名稱']); const qtyIdx = map(['數量']);
+    const unitIdx = map(['單位']); const recvIdx = map(['收貨', '人員']); const notesIdx = map(['備註']);
+    let added = 0;
+    const next = [...records];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const qty = Number(r[qtyIdx] || 0);
+      const itemName = r[nameIdx] || '';
+      next.push({
+        id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '', itemName,
+        quantity: qty, unit: r[unitIdx] || '包', receiver: r[recvIdx] || '', notes: r[notesIdx] || '',
+        extraRows: [],
+      });
+      syncStockFromDelivery(itemName, qty);
+      added++;
+    }
+    setRecords(next); setStore('noodle_delivery', next);
+    toast.success(`匯入完成：新增 ${added} 筆`);
   }
 
   return (
@@ -62,7 +94,12 @@ export default function NoodleDeliveryPage() {
           <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9 max-w-48" />
           {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <ExcelImportExport
+          exportHeaders={['日期', '品項', '數量', '單位', '收貨人', '備註']}
+          exportRows={() => filtered.map(r => [r.date, r.itemName, r.quantity, r.unit, r.receiver, r.notes])}
+          exportFilename={`麵廠送貨_${new Date().toISOString().slice(0, 10)}`}
+          onImport={handleImport}
+        />
         <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing(INIT()); }}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增</Button></DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -96,7 +133,6 @@ export default function NoodleDeliveryPage() {
               </div>
               <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">備註</label>
                 <Input value={editing.notes} onChange={e => setEditing(p => ({ ...p, notes: e.target.value }))} className="h-9" /></div>
-
               <p className="text-sm font-medium text-foreground mt-2">其他品項</p>
               {(editing.extraRows || []).map((row, idx) => (
                 <div key={idx} className="p-3 border rounded-lg space-y-2">
@@ -111,7 +147,6 @@ export default function NoodleDeliveryPage() {
                   </div>
                 </div>
               ))}
-
               <Button onClick={save} className="w-full erp-gradient text-primary-foreground">儲存</Button>
             </div>
           </DialogContent>
@@ -132,7 +167,7 @@ export default function NoodleDeliveryPage() {
                 <TableCell className="text-right">{r.quantity}</TableCell><TableCell>{r.unit}</TableCell>
                 <TableCell>{r.receiver}</TableCell><TableCell className="text-muted-foreground text-xs">{r.notes}</TableCell>
                 <TableCell className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => { setEditing({ ...r, extraRows: r.extraRows || Array.from({ length: 5 }, emptyExtra) }); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setEditing({ ...r, extraRows: r.extraRows || Array.from({ length: 8 }, emptyExtra) }); setOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => { if (confirm('確定刪除此筆資料？')) { const next = records.filter(x => x.id !== r.id); setRecords(next); setStore('noodle_delivery', next); } }}><Trash2 className="w-3.5 h-3.5 text-destructive" /></Button>
                 </TableCell>
               </TableRow>

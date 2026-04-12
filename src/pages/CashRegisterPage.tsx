@@ -1,14 +1,15 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
-import { exportToCSV } from '@/lib/exportUtils';
 import type { CashRegisterRecord } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Search, Download, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
+import ExcelImportExport from '@/components/ExcelImportExport';
+import { toast } from 'sonner';
 
 const ORIGINAL_RESERVE = 5420;
 
@@ -47,13 +48,36 @@ export default function CashRegisterPage() {
     setRecords(next); setStore('cash_register', next); setOpen(false); setEditing(INITIAL);
   }
 
-  function handleExport() {
-    exportToCSV(
-      ['日期', '錢櫃現金', '門市現金', '線上支付', '總營收', '實收金額', '原始預備金', '損溢', '盤點人員', '備註'],
-      filtered.map(r => [r.date, r.cashTotal, r.storeCashRevenue, r.onlinePayment, r.totalRevenue, r.actualReceived, r.originalReserve, r.profitLoss, r.checker, r.notes]),
-      `錢櫃營收_${new Date().toISOString().slice(0, 10)}`
-    );
+  function handleImport(rows: string[][]) {
+    const header = rows[0];
+    const map = (keywords: string[]) => header.findIndex(h => keywords.some(k => h.includes(k)));
+    const dateIdx = map(['日期']); const b1000 = map(['1000']); const b500 = map(['500']); const b100 = map(['100']);
+    const c50 = map(['50']); const c10Idx = map(['10']); const c5 = map(['5']); const c1 = map(['1元']);
+    const storeIdx = map(['門市', '現金營收']); const onlineIdx = map(['線上']); const checkerIdx = map(['盤點', '人員']);
+    const notesIdx = map(['備註']);
+
+    let added = 0;
+    const next = [...records];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const rec: Omit<CashRegisterRecord, 'id'> = {
+        date: r[dateIdx >= 0 ? dateIdx : 0] || '', bills1000: Number(r[b1000] || 0), bills500: Number(r[b500] || 0),
+        bills100: Number(r[b100] || 0), coins50: Number(r[c50] || 0), coins10: Number(r[c10Idx] || 0),
+        coins5: Number(r[c5] || 0), coins1: Number(r[c1] || 0), other: 0, cashTotal: 0,
+        storeCashRevenue: Number(r[storeIdx] || 0), onlinePayment: Number(r[onlineIdx] || 0),
+        totalRevenue: 0, actualReceived: 0, originalReserve: ORIGINAL_RESERVE, profitLoss: 0,
+        checker: r[checkerIdx] || '', notes: r[notesIdx] || '',
+      };
+      const calculated = calcTotals(rec);
+      next.push({ ...calculated, id: genId() } as CashRegisterRecord);
+      added++;
+    }
+    setRecords(next); setStore('cash_register', next);
+    toast.success(`匯入完成：新增 ${added} 筆`);
   }
+
+  const exportHeaders = ['日期', '1000元', '500元', '100元', '50元', '10元', '5元', '1元', '錢櫃現金', '門市現金', '線上支付', '總營收', '實收金額', '預備金', '損溢', '盤點人員', '備註'];
 
   const F = (key: keyof typeof editing, label: string, type = 'number') => (
     <div className="space-y-1">
@@ -71,7 +95,12 @@ export default function CashRegisterPage() {
           <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9 max-w-48" />
           {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <ExcelImportExport
+          exportHeaders={exportHeaders}
+          exportRows={() => filtered.map(r => [r.date, r.bills1000, r.bills500, r.bills100, r.coins50, r.coins10, r.coins5, r.coins1, r.cashTotal, r.storeCashRevenue, r.onlinePayment, r.totalRevenue, r.actualReceived, r.originalReserve, r.profitLoss, r.checker, r.notes])}
+          exportFilename={`錢櫃營收_${new Date().toISOString().slice(0, 10)}`}
+          onImport={handleImport}
+        />
         <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) setEditing(INITIAL); }}>
           <DialogTrigger asChild><Button size="sm" className="erp-gradient text-primary-foreground"><Plus className="w-4 h-4 mr-1" />新增紀錄</Button></DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">

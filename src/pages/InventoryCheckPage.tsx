@@ -1,15 +1,16 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
-import { getDefaultInventory, CATEGORIES, getItemsByCategory } from '@/lib/inventoryData';
-import { exportToCSV } from '@/lib/exportUtils';
+import { getDefaultInventory, saveInventory, CATEGORIES, getItemsByCategory } from '@/lib/inventoryData';
 import type { InventoryItem, DailyInventoryRecord, InventoryCheckItem, InventoryExtraRow } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Search, Save, Download, Trash2 } from 'lucide-react';
+import { Plus, Search, Save, Trash2 } from 'lucide-react';
+import ExcelImportExport from '@/components/ExcelImportExport';
+import { toast } from 'sonner';
 
 interface Props {
   storeKey: string;
@@ -108,19 +109,64 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
     if (editingId) next = records.map(r => r.id === editingId ? rec : r);
     else next = [...records, rec];
     setRecords(next); setStore(storeKey, next); setOpen(false);
+    // Sync stock to master database
+    const allInv = getDefaultInventory();
+    let changed = false;
+    items.forEach(it => {
+      if (showInOut && it.currentStock !== undefined) {
+        const master = allInv.find(m => m.name === it.itemName);
+        if (master && master.currentStock !== it.currentStock) {
+          master.currentStock = it.currentStock;
+          changed = true;
+        }
+      }
+    });
+    extraRows.forEach(er => {
+      if (showInOut && er.itemName && er.currentStock !== undefined) {
+        const master = allInv.find(m => m.name === er.itemName);
+        if (master && master.currentStock !== er.currentStock) {
+          master.currentStock = er.currentStock;
+          changed = true;
+        }
+      }
+    });
+    if (changed) saveInventory(allInv);
   }
 
-  function handleExport() {
-    const headers = showInOut
-      ? ['品項', '單位', '昨日庫存', '進出庫', '數量', '庫存結算']
-      : ['品項', '單位', '數量'];
-    const latest = filtered.length > 0 ? filtered[filtered.length - 1] : null;
-    if (!latest) return;
-    const rows = latest.items.map(i => showInOut
-      ? [i.itemName, i.unit, i.previousStock, i.inOut === 'in' ? '進' : i.inOut === 'out' ? '出' : '-', i.quantity, i.currentStock]
-      : [i.itemName, i.unit, i.quantity]
-    );
-    exportToCSV(headers, rows as (string | number)[][], `${title}_${latest.date}`);
+  function handleImport(rows: string[][]) {
+    const header = rows[0];
+    const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
+    const nameIdx = map(['品項', '名稱']); const qtyIdx = map(['數量']);
+    const inOutIdx = map(['進出', '進/出']);
+    if (nameIdx < 0) { toast.error('找不到品項欄位'); return; }
+    // Build a record from the imported data
+    const importItems = inventory.map(i => {
+      const prev = getLastStock(i.name);
+      return { itemName: i.name, unit: i.unit, previousStock: prev, inOut: 'none' as const, quantity: 0, currentStock: prev };
+    });
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const name = r[nameIdx]?.trim();
+      if (!name) continue;
+      const found = importItems.find(it => it.itemName === name);
+      if (found) {
+        found.quantity = Number(r[qtyIdx] || 0);
+        if (inOutIdx >= 0) {
+          const io = r[inOutIdx]?.trim();
+          (found as any).inOut = io === '進' ? 'in' : io === '出' ? 'out' : 'none';
+        }
+        const inOut = (found as any).inOut as string;
+        if (inOut === 'in') found.currentStock = found.previousStock + found.quantity;
+        else if (inOut === 'out') found.currentStock = found.previousStock - found.quantity;
+      }
+    }
+    const rec: DailyInventoryRecord = {
+      id: genId(), date: new Date().toISOString().slice(0, 10),
+      items: importItems, checker: '', notes: '從Excel匯入', extraRows: [],
+    };
+    const next = [...records, rec];
+    setRecords(next); setStore(storeKey, next);
+    toast.success('盤點資料匯入完成');
   }
 
   const allItems = useMemo(() => {
@@ -139,7 +185,19 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
           <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9 max-w-48" />
           {searchDate && <Button variant="ghost" size="sm" onClick={() => setSearchDate('')}>清除</Button>}
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />匯出CSV</Button>
+        <ExcelImportExport
+          exportHeaders={showInOut ? ['品項', '單位', '昨日庫存', '進出庫', '數量', '庫存結算'] : ['品項', '單位', '數量']}
+          exportRows={() => {
+            const latest = filtered.length > 0 ? filtered[filtered.length - 1] : null;
+            if (!latest) return [];
+            return latest.items.map(i => showInOut
+              ? [i.itemName, i.unit, i.previousStock, i.inOut === 'in' ? '進' : i.inOut === 'out' ? '出' : '-', i.quantity, i.currentStock]
+              : [i.itemName, i.unit, i.quantity]
+            ) as (string | number)[][];
+          }}
+          exportFilename={`${title}_${new Date().toISOString().slice(0, 10)}`}
+          onImport={handleImport}
+        />
         <Button size="sm" className="erp-gradient text-primary-foreground" onClick={startNew}><Plus className="w-4 h-4 mr-1" />新增盤點</Button>
       </div>
 
