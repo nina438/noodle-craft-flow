@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
 import { getDefaultInventory, saveInventory, CATEGORIES, getItemsByCategory } from '@/lib/inventoryData';
-import type { InventoryItem, DailyInventoryRecord, InventoryCheckItem, InventoryExtraRow } from '@/lib/types';
+import type { InventoryItem, DailyInventoryRecord, InventoryCheckItem, InventoryExtraRow, PurchaseRecord } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,8 +103,26 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
     });
   }
 
+  function syncPurchaseFromInventory(allItems: (InventoryCheckItem | InventoryExtraRow)[]) {
+    const incomingItems = allItems.filter(it => it.inOut === 'in' && it.quantity > 0 && it.itemName);
+    if (incomingItems.length === 0) return;
+    const purchases: PurchaseRecord[] = getStore('purchases');
+    const allInv = getDefaultInventory();
+    incomingItems.forEach(it => {
+      const master = allInv.find(m => m.name === it.itemName);
+      purchases.push({
+        id: genId(), date, category: master?.category || '', itemName: it.itemName,
+        quantity: it.quantity, unit: it.unit || master?.unit || '', unitPrice: 0, totalAmount: 0,
+        paymentMethod: '現金', checker, notes: `從${title}盤點自動帶入`,
+        extraRows: [],
+      });
+    });
+    setStore('purchases', purchases);
+  }
+
   function save() {
     const rec: DailyInventoryRecord = { id: editingId || genId(), date, items, checker, notes, extraRows };
+    const isNew = !editingId;
     let next: DailyInventoryRecord[];
     if (editingId) next = records.map(r => r.id === editingId ? rec : r);
     else next = [...records, rec];
@@ -131,6 +149,10 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
       }
     });
     if (changed) saveInventory(allInv);
+    // Auto-create purchase records for 進貨 items (only for new records)
+    if (isNew && showInOut) {
+      syncPurchaseFromInventory([...items, ...extraRows]);
+    }
   }
 
   function handleImport(rows: string[][]) {
