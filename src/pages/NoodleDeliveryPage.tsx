@@ -65,17 +65,29 @@ export default function NoodleDeliveryPage() {
   function handleImport(rows: string[][]) {
     const header = rows[0];
     const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
-    const dateIdx = map(['日期']); const nameIdx = map(['品項', '名稱']); const qtyIdx = map(['數量']);
-    const unitIdx = map(['單位']); const recvIdx = map(['收貨', '人員']); const notesIdx = map(['備註']);
+    const dateIdx = map(['日期']);
+    const nameIdx = map(['商品名稱', '品項', '名稱']);
+    const qtyIdx = map(['數量']);
+    const unitIdx = map(['單位']);
+    const recvIdx = map(['盤點人員', '收貨', '人員']);
+    const notesIdx = map(['備註']);
     let added = 0;
     const next = [...records];
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
-      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const dateVal = r[dateIdx >= 0 ? dateIdx : 0]?.trim();
+      if (!dateVal) continue;
+      let dateStr = dateVal;
+      if (/^\d{5}$/.test(dateVal)) {
+        const d = new Date((Number(dateVal) - 25569) * 86400000);
+        dateStr = d.toISOString().slice(0, 10);
+      } else if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateVal)) {
+        dateStr = dateVal.replace(/\//g, '-').slice(0, 10);
+      }
       const qty = Number(r[qtyIdx] || 0);
       const itemName = r[nameIdx] || '';
       next.push({
-        id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '', itemName,
+        id: genId(), date: dateStr, itemName,
         quantity: qty, unit: r[unitIdx] || '包', receiver: r[recvIdx] || '', notes: r[notesIdx] || '',
         extraRows: [],
       });

@@ -50,21 +50,41 @@ export default function CashRegisterPage() {
 
   function handleImport(rows: string[][]) {
     const header = rows[0];
-    const map = (keywords: string[]) => header.findIndex(h => keywords.some(k => h.includes(k)));
-    const dateIdx = map(['日期']); const b1000 = map(['1000']); const b500 = map(['500']); const b100 = map(['100']);
-    const c50 = map(['50']); const c10Idx = map(['10']); const c5 = map(['5']); const c1 = map(['1元']);
-    const storeIdx = map(['門市', '現金營收']); const onlineIdx = map(['線上']); const checkerIdx = map(['盤點', '人員']);
-    const notesIdx = map(['備註']);
+    // Exact match for denomination columns to avoid '10' matching '1000'
+    const exactIdx = (val: string) => header.findIndex(h => h.trim() === val);
+    const includesIdx = (keywords: string[]) => header.findIndex(h => keywords.some(k => h.includes(k)));
+    const dateIdx = includesIdx(['日期']);
+    const b1000 = exactIdx('1000');
+    const b500 = exactIdx('500');
+    const b100 = exactIdx('100');
+    const c50 = exactIdx('50');
+    const c10Idx = exactIdx('10');
+    const c5 = exactIdx('5');
+    const c1 = exactIdx('1');
+    const otherIdx = includesIdx(['其他']);
+    const storeIdx = includesIdx(['門市']);
+    const onlineIdx = includesIdx(['線上']);
+    const checkerIdx = includesIdx(['盤點人員', '人員']);
+    const notesIdx = includesIdx(['備註']);
 
     let added = 0;
     const next = [...records];
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
-      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const dateVal = r[dateIdx >= 0 ? dateIdx : 0]?.trim();
+      if (!dateVal) continue;
+      // Handle Excel serial date numbers
+      let dateStr = dateVal;
+      if (/^\d{5}$/.test(dateVal)) {
+        const d = new Date((Number(dateVal) - 25569) * 86400000);
+        dateStr = d.toISOString().slice(0, 10);
+      } else if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateVal)) {
+        dateStr = dateVal.replace(/\//g, '-').slice(0, 10);
+      }
       const rec: Omit<CashRegisterRecord, 'id'> = {
-        date: r[dateIdx >= 0 ? dateIdx : 0] || '', bills1000: Number(r[b1000] || 0), bills500: Number(r[b500] || 0),
+        date: dateStr, bills1000: Number(r[b1000] || 0), bills500: Number(r[b500] || 0),
         bills100: Number(r[b100] || 0), coins50: Number(r[c50] || 0), coins10: Number(r[c10Idx] || 0),
-        coins5: Number(r[c5] || 0), coins1: Number(r[c1] || 0), other: 0, cashTotal: 0,
+        coins5: Number(r[c5] || 0), coins1: Number(r[c1] || 0), other: Number(r[otherIdx] || 0), cashTotal: 0,
         storeCashRevenue: Number(r[storeIdx] || 0), onlinePayment: Number(r[onlineIdx] || 0),
         totalRevenue: 0, actualReceived: 0, originalReserve: ORIGINAL_RESERVE, profitLoss: 0,
         checker: r[checkerIdx] || '', notes: r[notesIdx] || '',
