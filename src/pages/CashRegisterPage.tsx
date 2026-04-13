@@ -50,17 +50,22 @@ export default function CashRegisterPage() {
 
   function handleImport(rows: string[][]) {
     const header = rows[0];
-    // Exact match for denomination columns to avoid '10' matching '1000'
-    const exactIdx = (val: string) => header.findIndex(h => h.trim() === val);
     const includesIdx = (keywords: string[]) => header.findIndex(h => keywords.some(k => h.includes(k)));
+    // Match denomination columns: support both "1000元" and exact "1000"
+    const denomIdx = (val: string) => {
+      let idx = header.findIndex(h => h.trim() === `${val}元`);
+      if (idx < 0) idx = header.findIndex(h => h.trim() === val);
+      if (idx < 0) idx = header.findIndex(h => h.trim().startsWith(val) && !header.some((h2, j) => j !== header.indexOf(h) && h2.trim().startsWith(val)));
+      return idx;
+    };
     const dateIdx = includesIdx(['日期']);
-    const b1000 = exactIdx('1000');
-    const b500 = exactIdx('500');
-    const b100 = exactIdx('100');
-    const c50 = exactIdx('50');
-    const c10Idx = exactIdx('10');
-    const c5 = exactIdx('5');
-    const c1 = exactIdx('1');
+    const b1000 = denomIdx('1000');
+    const b500 = denomIdx('500');
+    const b100 = header.findIndex(h => h.trim() === '100元' || h.trim() === '100');
+    const c50 = header.findIndex(h => h.trim() === '50元' || h.trim() === '50');
+    const c10Idx = header.findIndex(h => h.trim() === '10元' || h.trim() === '10');
+    const c5 = header.findIndex(h => h.trim() === '5元' || h.trim() === '5');
+    const c1 = header.findIndex(h => h.trim() === '1元' || h.trim() === '1');
     const otherIdx = includesIdx(['其他']);
     const storeIdx = includesIdx(['門市']);
     const onlineIdx = includesIdx(['線上']);

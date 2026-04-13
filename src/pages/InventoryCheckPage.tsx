@@ -159,11 +159,13 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
     const header = rows[0];
     const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
     const nameIdx = map(['商品名稱', '品項', '名稱']);
-    const consumeIdx = map(['出庫', '消耗']);
-    const purchaseIdx = header.findIndex(h => h.includes('進貨') || (h.includes('進') && !h.includes('出')));
+    // Separate columns for out/in (from original Excel format)
+    const consumeIdx = header.findIndex(h => (h.includes('出庫') || h.includes('消耗')) && !h.includes('進'));
+    const purchaseIdx = header.findIndex(h => h.includes('進貨') && !h.includes('出'));
     const settledIdx = map(['關店結算', '結算庫存', '庫存結算']);
     const qtyIdx = map(['數量']);
-    const inOutIdx = map(['進出', '進/出']);
+    // Combined in/out column (from app export format "進出庫")
+    const inOutIdx = header.findIndex(h => h === '進出庫' || h === '進出' || h === '進/出');
     const checkerIdx = map(['盤點人員', '人員']);
     const dateIdx = map(['日期']);
     if (nameIdx < 0) { toast.error('找不到品項欄位'); return; }
@@ -189,8 +191,14 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
       if (!name) continue;
       const found = importItems.find(it => it.itemName === name);
       if (found) {
-        // Handle Excel format with separate 出庫/消耗 and 進貨 columns
-        if (consumeIdx >= 0 || purchaseIdx >= 0) {
+        // Check for combined 進出庫 text column first (from app export)
+        if (inOutIdx >= 0 && qtyIdx >= 0) {
+          const ioText = r[inOutIdx]?.trim();
+          found.quantity = Number(r[qtyIdx] || 0);
+          (found as any).inOut = ioText === '進' ? 'in' : ioText === '出' ? 'out' : 'none';
+        }
+        // Handle Excel format with separate 出庫/消耗 and 進貨 number columns
+        else if (consumeIdx >= 0 || purchaseIdx >= 0) {
           const consume = consumeIdx >= 0 ? Number(r[consumeIdx] || 0) : 0;
           const purchase = purchaseIdx >= 0 ? Number(r[purchaseIdx] || 0) : 0;
           if (consume > 0) {
@@ -202,10 +210,6 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
           }
         } else if (qtyIdx >= 0) {
           found.quantity = Number(r[qtyIdx] || 0);
-          if (inOutIdx >= 0) {
-            const io = r[inOutIdx]?.trim();
-            (found as any).inOut = io === '進' ? 'in' : io === '出' ? 'out' : 'none';
-          }
         }
         // Use settled stock if available, otherwise calculate
         if (settledIdx >= 0 && r[settledIdx]) {

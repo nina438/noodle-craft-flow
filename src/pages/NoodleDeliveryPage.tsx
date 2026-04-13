@@ -67,7 +67,7 @@ export default function NoodleDeliveryPage() {
     const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
     const dateIdx = map(['日期']);
     const nameIdx = map(['商品名稱', '品項', '名稱']);
-    const qtyIdx = map(['數量']);
+    const qtyIdx = header.findIndex((h, idx) => h.includes('數量') && idx !== nameIdx);
     const unitIdx = map(['單位']);
     const recvIdx = map(['盤點人員', '收貨', '人員']);
     const notesIdx = map(['備註']);
