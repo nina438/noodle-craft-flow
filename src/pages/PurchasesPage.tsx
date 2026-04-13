@@ -82,7 +82,7 @@ export default function PurchasesPage() {
     const qtyIdx = map(['數量']);
     const unitIdx = map(['單位']);
     const priceIdx = map(['單價']);
-    const totalIdx = map(['總金額', '金額']);
+    const totalIdx = map(['總金額', '總額', '金額']);
     const payIdx = map(['付款']);
     const checkerIdx = map(['盤點人員', '經手', '人員']);
     const notesIdx = map(['備註']);
