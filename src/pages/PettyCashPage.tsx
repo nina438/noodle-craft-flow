@@ -59,18 +59,44 @@ export default function PettyCashPage() {
   function handleImport(rows: string[][]) {
     const header = rows[0];
     const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
-    const dateIdx = map(['日期']); const descIdx = map(['說明', '描述']); const typeIdx = map(['類型', '收支']);
-    const amtIdx = map(['金額']); const handlerIdx = map(['經手', '人員']); const notesIdx = map(['備註']);
+    const dateIdx = map(['日期']);
+    const descIdx = map(['項目', '說明', '描述']);
+    const incomeIdx = header.findIndex(h => h.includes('收入') && h.includes('金額'));
+    const expenseIdx = header.findIndex(h => h.includes('支出') && h.includes('金額'));
+    const singleAmtIdx = incomeIdx < 0 && expenseIdx < 0 ? map(['金額']) : -1;
+    const typeIdx = map(['類型', '收支']);
+    const handlerIdx = map(['盤點人員', '經手', '人員']);
+    const notesIdx = map(['備註']);
     let added = 0;
     const next = [...records];
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
-      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
-      const typeStr = r[typeIdx] || '';
+      const dateVal = r[dateIdx >= 0 ? dateIdx : 0]?.trim();
+      if (!dateVal) continue;
+      let dateStr = dateVal;
+      if (/^\d{5}$/.test(dateVal)) {
+        const d = new Date((Number(dateVal) - 25569) * 86400000);
+        dateStr = d.toISOString().slice(0, 10);
+      } else if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateVal)) {
+        dateStr = dateVal.replace(/\//g, '-').slice(0, 10);
+      }
+      // Determine type and amount from separate income/expense columns or single column
+      let type: 'income' | 'expense' = 'expense';
+      let amount = 0;
+      if (incomeIdx >= 0 && expenseIdx >= 0) {
+        const inc = Number(r[incomeIdx] || 0);
+        const exp = Number(r[expenseIdx] || 0);
+        if (inc > 0) { type = 'income'; amount = inc; }
+        else { type = 'expense'; amount = exp; }
+      } else if (singleAmtIdx >= 0) {
+        amount = Math.abs(Number(r[singleAmtIdx] || 0));
+        if (typeIdx >= 0) type = r[typeIdx]?.includes('收') ? 'income' : 'expense';
+      }
+      if (amount === 0 && !r[descIdx]?.trim()) continue;
       next.push({
-        id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '',
-        description: r[descIdx] || '', type: typeStr.includes('收') ? 'income' : 'expense',
-        amount: Number(r[amtIdx] || 0), handler: r[handlerIdx] || '', notes: r[notesIdx] || '',
+        id: genId(), date: dateStr,
+        description: r[descIdx] || '', type, amount,
+        handler: r[handlerIdx] || '', notes: r[notesIdx] || '',
         extraRows: [],
       });
       added++;

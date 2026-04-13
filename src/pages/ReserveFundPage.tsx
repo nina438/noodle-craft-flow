@@ -76,23 +76,49 @@ export default function ReserveFundPage() {
   function handleImport(rows: string[][]) {
     const header = rows[0];
     const dateIdx = header.findIndex(h => h.includes('日期'));
-    const handlerIdx = header.findIndex(h => h.includes('經手') || h.includes('人員'));
+    const handlerIdx = header.findIndex(h => h.includes('盤點人員') || h.includes('經手') || h.includes('人員'));
     const notesIdx = header.findIndex(h => h.includes('備註'));
+    // Excel format: 取出金額, 數量 columns - try to find denomination + quantity pairs
+    const denomIdx = header.findIndex(h => h.includes('取出金額') || h.includes('幣值'));
+    const qtyIdx = header.findIndex(h => h.includes('數量'));
+    // Also support export format with individual denomination columns
     const denomIdxMap: Record<number, number> = {};
     DENOMINATIONS.forEach(d => {
-      const idx = header.findIndex(h => h.includes(`${d}元`) || h === `${d}`);
+      const idx = header.findIndex(h => h.trim() === `${d}元(數量)` || h.trim() === `${d}元` || h.trim() === `${d}`);
       if (idx >= 0) denomIdxMap[d] = idx;
     });
     let added = 0;
     const next = [...records];
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
-      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
-      const denoms = DENOMINATIONS.map(d => {
-        const qty = denomIdxMap[d] !== undefined ? Number(r[denomIdxMap[d]] || 0) : 0;
-        return { denomination: d, quantity: qty, amount: qty * d };
-      });
-      next.push({ id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '', denominations: denoms, handler: r[handlerIdx] || '', notes: r[notesIdx] || '' });
+      const dateVal = r[dateIdx >= 0 ? dateIdx : 0]?.trim();
+      if (!dateVal) continue;
+      let dateStr = dateVal;
+      if (/^\d{5}$/.test(dateVal)) {
+        const d = new Date((Number(dateVal) - 25569) * 86400000);
+        dateStr = d.toISOString().slice(0, 10);
+      } else if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateVal)) {
+        dateStr = dateVal.replace(/\//g, '-').slice(0, 10);
+      }
+      let denoms: ReserveDenomination[];
+      if (Object.keys(denomIdxMap).length > 0) {
+        denoms = DENOMINATIONS.map(d => {
+          const qty = denomIdxMap[d] !== undefined ? Number(r[denomIdxMap[d]] || 0) : 0;
+          return { denomination: d, quantity: qty, amount: qty * d };
+        });
+      } else if (denomIdx >= 0 && qtyIdx >= 0) {
+        const denomVal = Number(r[denomIdx] || 0);
+        const qtyVal = Number(r[qtyIdx] || 0);
+        denoms = DENOMINATIONS.map(d => ({
+          denomination: d,
+          quantity: d === denomVal ? qtyVal : 0,
+          amount: d === denomVal ? qtyVal * d : 0,
+        }));
+      } else {
+        denoms = makeDenoms();
+      }
+      if (denoms.every(d => d.quantity === 0) && !r[notesIdx]?.trim()) continue;
+      next.push({ id: genId(), date: dateStr, denominations: denoms, handler: r[handlerIdx] || '', notes: r[notesIdx] || '' });
       added++;
     }
     setRecords(next); setStore('reserve_fund', next);

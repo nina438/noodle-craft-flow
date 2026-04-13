@@ -76,20 +76,36 @@ export default function PurchasesPage() {
   function handleImport(rows: string[][]) {
     const header = rows[0];
     const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
-    const dateIdx = map(['日期']); const catIdx = map(['種類', '分類']); const nameIdx = map(['品項', '名稱']);
-    const qtyIdx = map(['數量']); const unitIdx = map(['單位']); const priceIdx = map(['單價']);
-    const payIdx = map(['付款']); const checkerIdx = map(['經手', '人員']); const notesIdx = map(['備註']);
+    const dateIdx = map(['日期']);
+    const catIdx = map(['種類', '分類']);
+    const nameIdx = map(['商品名稱', '品項', '名稱']);
+    const qtyIdx = map(['數量']);
+    const unitIdx = map(['單位']);
+    const priceIdx = map(['單價']);
+    const totalIdx = map(['總金額', '金額']);
+    const payIdx = map(['付款']);
+    const checkerIdx = map(['盤點人員', '經手', '人員']);
+    const notesIdx = map(['備註']);
     let added = 0;
     const next = [...records];
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
-      if (!r[dateIdx >= 0 ? dateIdx : 0]?.trim()) continue;
+      const dateVal = r[dateIdx >= 0 ? dateIdx : 0]?.trim();
+      if (!dateVal) continue;
+      let dateStr = dateVal;
+      if (/^\d{5}$/.test(dateVal)) {
+        const d = new Date((Number(dateVal) - 25569) * 86400000);
+        dateStr = d.toISOString().slice(0, 10);
+      } else if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateVal)) {
+        dateStr = dateVal.replace(/\//g, '-').slice(0, 10);
+      }
       const qty = Number(r[qtyIdx] || 0);
       const price = Number(r[priceIdx] || 0);
+      const total = totalIdx >= 0 ? Number(r[totalIdx] || 0) : qty * price;
       next.push({
-        id: genId(), date: r[dateIdx >= 0 ? dateIdx : 0] || '',
+        id: genId(), date: dateStr,
         category: r[catIdx] || '', itemName: r[nameIdx] || '',
-        quantity: qty, unit: r[unitIdx] || '', unitPrice: price, totalAmount: qty * price,
+        quantity: qty, unit: r[unitIdx] || '', unitPrice: price, totalAmount: total,
         paymentMethod: r[payIdx] || '現金', checker: r[checkerIdx] || '', notes: r[notesIdx] || '',
         extraRows: [],
       });

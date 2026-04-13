@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { getStore, setStore, genId } from '@/lib/store';
 import { getDefaultInventory, saveInventory, CATEGORIES, getItemsByCategory } from '@/lib/inventoryData';
-import type { InventoryItem, DailyInventoryRecord, InventoryCheckItem, InventoryExtraRow } from '@/lib/types';
+import type { InventoryItem, DailyInventoryRecord, InventoryCheckItem, InventoryExtraRow, PurchaseRecord } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,8 +103,26 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
     });
   }
 
+  function syncPurchaseFromInventory(allItems: (InventoryCheckItem | InventoryExtraRow)[]) {
+    const incomingItems = allItems.filter(it => it.inOut === 'in' && it.quantity > 0 && it.itemName);
+    if (incomingItems.length === 0) return;
+    const purchases: PurchaseRecord[] = getStore('purchases');
+    const allInv = getDefaultInventory();
+    incomingItems.forEach(it => {
+      const master = allInv.find(m => m.name === it.itemName);
+      purchases.push({
+        id: genId(), date, category: master?.category || '', itemName: it.itemName,
+        quantity: it.quantity, unit: it.unit || master?.unit || '', unitPrice: 0, totalAmount: 0,
+        paymentMethod: '現金', checker, notes: `從${title}盤點自動帶入`,
+        extraRows: [],
+      });
+    });
+    setStore('purchases', purchases);
+  }
+
   function save() {
     const rec: DailyInventoryRecord = { id: editingId || genId(), date, items, checker, notes, extraRows };
+    const isNew = !editingId;
     let next: DailyInventoryRecord[];
     if (editingId) next = records.map(r => r.id === editingId ? rec : r);
     else next = [...records, rec];
@@ -131,15 +149,36 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
       }
     });
     if (changed) saveInventory(allInv);
+    // Auto-create purchase records for 進貨 items (only for new records)
+    if (isNew && showInOut) {
+      syncPurchaseFromInventory([...items, ...extraRows]);
+    }
   }
 
   function handleImport(rows: string[][]) {
     const header = rows[0];
     const map = (kw: string[]) => header.findIndex(h => kw.some(k => h.includes(k)));
-    const nameIdx = map(['品項', '名稱']); const qtyIdx = map(['數量']);
+    const nameIdx = map(['商品名稱', '品項', '名稱']);
+    const consumeIdx = map(['出庫', '消耗']);
+    const purchaseIdx = header.findIndex(h => h.includes('進貨') || (h.includes('進') && !h.includes('出')));
+    const settledIdx = map(['關店結算', '結算庫存', '庫存結算']);
+    const qtyIdx = map(['數量']);
     const inOutIdx = map(['進出', '進/出']);
+    const checkerIdx = map(['盤點人員', '人員']);
+    const dateIdx = map(['日期']);
     if (nameIdx < 0) { toast.error('找不到品項欄位'); return; }
-    // Build a record from the imported data
+
+    let dateStr = new Date().toISOString().slice(0, 10);
+    if (dateIdx >= 0 && rows[1]?.[dateIdx]?.trim()) {
+      const dv = rows[1][dateIdx].trim();
+      if (/^\d{5}$/.test(dv)) {
+        const d = new Date((Number(dv) - 25569) * 86400000);
+        dateStr = d.toISOString().slice(0, 10);
+      } else if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dv)) {
+        dateStr = dv.replace(/\//g, '-').slice(0, 10);
+      } else { dateStr = dv; }
+    }
+
     const importItems = inventory.map(i => {
       const prev = getLastStock(i.name);
       return { itemName: i.name, unit: i.unit, previousStock: prev, inOut: 'none' as const, quantity: 0, currentStock: prev };
@@ -150,19 +189,38 @@ export default function InventoryCheckPage({ storeKey, categoryFilter, title, sh
       if (!name) continue;
       const found = importItems.find(it => it.itemName === name);
       if (found) {
-        found.quantity = Number(r[qtyIdx] || 0);
-        if (inOutIdx >= 0) {
-          const io = r[inOutIdx]?.trim();
-          (found as any).inOut = io === '進' ? 'in' : io === '出' ? 'out' : 'none';
+        // Handle Excel format with separate 出庫/消耗 and 進貨 columns
+        if (consumeIdx >= 0 || purchaseIdx >= 0) {
+          const consume = consumeIdx >= 0 ? Number(r[consumeIdx] || 0) : 0;
+          const purchase = purchaseIdx >= 0 ? Number(r[purchaseIdx] || 0) : 0;
+          if (consume > 0) {
+            (found as any).inOut = 'out';
+            found.quantity = consume;
+          } else if (purchase > 0) {
+            (found as any).inOut = 'in';
+            found.quantity = purchase;
+          }
+        } else if (qtyIdx >= 0) {
+          found.quantity = Number(r[qtyIdx] || 0);
+          if (inOutIdx >= 0) {
+            const io = r[inOutIdx]?.trim();
+            (found as any).inOut = io === '進' ? 'in' : io === '出' ? 'out' : 'none';
+          }
         }
-        const inOut = (found as any).inOut as string;
-        if (inOut === 'in') found.currentStock = found.previousStock + found.quantity;
-        else if (inOut === 'out') found.currentStock = found.previousStock - found.quantity;
+        // Use settled stock if available, otherwise calculate
+        if (settledIdx >= 0 && r[settledIdx]) {
+          found.currentStock = Number(r[settledIdx]);
+        } else {
+          const inOut = (found as any).inOut as string;
+          if (inOut === 'in') found.currentStock = found.previousStock + found.quantity;
+          else if (inOut === 'out') found.currentStock = found.previousStock - found.quantity;
+        }
       }
     }
+    const importChecker = checkerIdx >= 0 && rows[1]?.[checkerIdx] ? rows[1][checkerIdx] : '';
     const rec: DailyInventoryRecord = {
-      id: genId(), date: new Date().toISOString().slice(0, 10),
-      items: importItems, checker: '', notes: '從Excel匯入', extraRows: [],
+      id: genId(), date: dateStr,
+      items: importItems, checker: importChecker, notes: '從Excel匯入', extraRows: [],
     };
     const next = [...records, rec];
     setRecords(next); setStore(storeKey, next);
