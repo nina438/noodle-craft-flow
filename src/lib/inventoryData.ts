@@ -181,21 +181,21 @@ const rawNoodleFactoryItems: RawItem[] = [
   { name: '陽光掛麵 - 長安麵 (批)', category: '麵廠叫貨原料', unit: '袋', safetyStock: 0, currentStock: 0 },
   { name: '金蔥袋裝出餐用', category: '麵廠叫貨原料', unit: '袋', safetyStock: 0, currentStock: 0 },
   { name: '椒麻醬袋裝出餐用', category: '麵廠叫貨原料', unit: '袋', safetyStock: 0, currentStock: 0 },
-  { name: '原子筆-(藍色)', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
-  { name: '原子筆-(黑色)', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
-  { name: '原子筆-(紅色)', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
-  { name: '白板筆-(黑色)', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
-  { name: '白板筆-(藍色)', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
+  { name: '原子筆-（藍色）', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
+  { name: '原子筆-（黑色）', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
+  { name: '原子筆-（紅色）', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
+  { name: '白板筆-（黑色）', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
+  { name: '白板筆-（藍色）', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
   { name: '奇異筆-黑', category: '麵廠叫貨原料', unit: '支', safetyStock: 0, currentStock: 0 },
   { name: '立可袋', category: '麵廠叫貨原料', unit: '個', safetyStock: 0, currentStock: 0 },
-  { name: '透明膠帶-(粗)', category: '麵廠叫貨原料', unit: '捲', safetyStock: 0, currentStock: 0 },
-  { name: '透明膠帶-(細)', category: '麵廠叫貨原料', unit: '捲', safetyStock: 0, currentStock: 0 },
+  { name: '透明膠帶-（粗）', category: '麵廠叫貨原料', unit: '捲', safetyStock: 0, currentStock: 0 },
+  { name: '透明膠帶-（細）', category: '麵廠叫貨原料', unit: '捲', safetyStock: 0, currentStock: 0 },
   { name: '雙面膠', category: '麵廠叫貨原料', unit: '捲', safetyStock: 0, currentStock: 0 },
   { name: '無痕膠', category: '麵廠叫貨原料', unit: '捲', safetyStock: 0, currentStock: 0 },
   { name: '訂書針', category: '麵廠叫貨原料', unit: '盒', safetyStock: 0, currentStock: 0 },
   { name: '發票紙捲', category: '麵廠叫貨原料', unit: '捲', safetyStock: 0, currentStock: 0 },
   { name: '充電電池', category: '麵廠叫貨原料', unit: '個', safetyStock: 0, currentStock: 0 },
-  { name: '外袋麵種貼紙(金蔥/椒麻)', category: '麵廠叫貨原料', unit: '個', safetyStock: 0, currentStock: 0 },
+  { name: '外袋麵種貼紙（金蔥/椒麻）', category: '麵廠叫貨原料', unit: '個', safetyStock: 0, currentStock: 0 },
   { name: 'logo紙袋', category: '麵廠叫貨原料', unit: '個', safetyStock: 0, currentStock: 0 },
   { name: '透明塑膠袋', category: '麵廠叫貨原料', unit: '個', safetyStock: 0, currentStock: 0 },
   { name: '筷子', category: '麵廠叫貨原料', unit: '袋', safetyStock: 0, currentStock: 0 },
@@ -232,7 +232,7 @@ const rawNoodleFactoryItems: RawItem[] = [
   { name: '可可麵', category: '麵廠叫貨原料', unit: '包', safetyStock: 0, currentStock: 10 },
   { name: '全麥麵', category: '麵廠叫貨原料', unit: '包', safetyStock: 0, currentStock: 0 },
   { name: '鐵觀音茶麵', category: '麵廠叫貨原料', unit: '包', safetyStock: 0, currentStock: 0 },
-  { name: '陽光掛麵 - 綜合禮袋組', category: '麵廠叫貨原料', unit: '盒', safetyStock: 0, currentStock: 0 },
+  { name: '陽光掛麵 - 綜合禮袋組', category: '麵廠叫貨原料', unit: '袋', safetyStock: 0, currentStock: 0 },
   { name: '金蔥醬 (五辛素)', category: '麵廠叫貨原料', unit: '盒', safetyStock: 0, currentStock: 10 },
   { name: '椒麻醬 (全素)', category: '麵廠叫貨原料', unit: '袋', safetyStock: 0, currentStock: 10 },
   { name: '金蔥醬(散裝)', category: '麵廠叫貨原料', unit: '盒', safetyStock: 0, currentStock: 0 },
@@ -245,8 +245,8 @@ const rawNoodleFactoryItems: RawItem[] = [
   { name: '屏東永續禮盒(綠)', category: '麵廠叫貨原料', unit: '瓶', safetyStock: 0, currentStock: 0 },
   { name: '金蔥風味油-隨身瓶', category: '麵廠叫貨原料', unit: '罐', safetyStock: 0, currentStock: 0 },
   { name: '龜甲萬純釀造醬油-原味', category: '麵廠叫貨原料', unit: '罐', safetyStock: 0, currentStock: 0 },
-  { name: '海苔醬-青青海苔佃煮(綠)', category: '麵廠叫貨原料', unit: '罐', safetyStock: 0, currentStock: 0 },
-  { name: '海苔醬-菇菇海苔佃煮-(紅)', category: '麵廠叫貨原料', unit: '罐', safetyStock: 0, currentStock: 0 },
+  { name: '海苔醬-青青海苔佃煮(綠)', category: '麵廠叫貨原料', unit: '瓶', safetyStock: 0, currentStock: 0 },
+  { name: '海苔醬-菇菇海苔佃煮-(紅)', category: '麵廠叫貨原料', unit: '瓶', safetyStock: 0, currentStock: 0 },
   { name: '虱目魚尬鮪魚鬆-經典', category: '麵廠叫貨原料', unit: '罐', safetyStock: 0, currentStock: 0 },
   { name: '虱目魚尬鮪魚鬆-海苔芝麻', category: '麵廠叫貨原料', unit: '罐', safetyStock: 0, currentStock: 0 },
   { name: '虱目魚干貝醬-原味', category: '麵廠叫貨原料', unit: '罐', safetyStock: 0, currentStock: 0 },
@@ -274,7 +274,7 @@ const rawOtherItems: RawItem[] = [
   { name: '瓦斯', category: '其他', unit: '桶', safetyStock: 0, currentStock: 0 },
 ];
 
-const DATA_VERSION = 'v3';
+const DATA_VERSION = 'v6';
 
 export function getDefaultInventory(): InventoryItem[] {
   const ver = localStorage.getItem('erp_master_inventory_version');
