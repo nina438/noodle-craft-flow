@@ -1,3 +1,20 @@
-# Welcome to your Lovable project
+# 長安製麵 ERP 管理系統
 
-TODO: Document your project here
+職人町 ERP 管理系統，用於管理錢櫃營收、進貨金額、零用金支出、預備金、食材及倉庫備品盤點、麵廠送貨紀錄等。
+
+## 開發環境設定
+
+1. 安裝依賴：
+   ```bash
+   npm install
+   ```
+
+2. 啟動開發伺服器：
+   ```bash
+   npm run dev
+   ```
+
+3. 構建生產版本：
+   ```bash
+   npm run build
+   ```
