@@ -22,13 +22,23 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('erp_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('erp_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error("Failed to parse user from localStorage", e);
+      return null;
+    }
   });
 
   const [staffList, setStaffList] = useState<string[]>(() => {
-    const saved = localStorage.getItem('erp_staff_list');
-    return saved ? JSON.parse(saved) : ['管理員', '店長', '員工A', '員工B', '員工C'];
+    try {
+      const saved = localStorage.getItem('erp_staff_list');
+      return saved ? JSON.parse(saved) : ['管理員', '店長', '員工A', '員工B', '員工C'];
+    } catch (e) {
+      console.error("Failed to parse staff list from localStorage", e);
+      return ['管理員', '店長', '員工A', '員工B', '員工C'];
+    }
   });
 
   const login = useCallback((username: string, password: string) => {
