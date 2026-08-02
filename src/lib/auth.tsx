@@ -20,26 +20,21 @@ const DEFAULT_USERS: { username: string; password: string; name: string; role: U
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('erp_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      console.error("Failed to parse user from localStorage", e);
-      return null;
-    }
-  });
+function safeReadJson<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) as T : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
-  const [staffList, setStaffList] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('erp_staff_list');
-      return saved ? JSON.parse(saved) : ['管理員', '店長', '員工A', '員工B', '員工C'];
-    } catch (e) {
-      console.error("Failed to parse staff list from localStorage", e);
-      return ['管理員', '店長', '員工A', '員工B', '員工C'];
-    }
-  });
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(() => safeReadJson<User | null>('erp_user', null));
+
+  const [staffList, setStaffList] = useState<string[]>(() =>
+    safeReadJson<string[]>('erp_staff_list', ['管理員', '店長', '員工A', '員工B', '員工C'])
+  );
 
   const login = useCallback((username: string, password: string) => {
     const found = DEFAULT_USERS.find(u => u.username === username && u.password === password);

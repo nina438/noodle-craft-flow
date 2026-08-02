@@ -276,11 +276,24 @@ const rawOtherItems: RawItem[] = [
 
 const DATA_VERSION = 'v6';
 
-export function getDefaultInventory(): InventoryItem[] {
-  const ver = localStorage.getItem('erp_master_inventory_version');
-  if (ver === DATA_VERSION) {
+function safeReadInventory(): InventoryItem[] | null {
+  try {
     const stored = localStorage.getItem('erp_master_inventory');
-    if (stored) return JSON.parse(stored);
+    return stored ? JSON.parse(stored) as InventoryItem[] : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getDefaultInventory(): InventoryItem[] {
+  // 清除舊版本的快取數據
+  const ver = localStorage.getItem('erp_master_inventory_version');
+  if (ver !== DATA_VERSION) {
+    localStorage.removeItem('erp_master_inventory');
+    localStorage.removeItem('erp_master_inventory_version');
+  } else {
+    const stored = safeReadInventory();
+    if (stored) return stored;
   }
   
   const all = [...rawFreshItems, ...rawDryItems, ...rawWarehouseItems, ...rawSalesItems, ...rawNoodleFactoryItems, ...rawOtherItems];
